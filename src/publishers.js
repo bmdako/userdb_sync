@@ -2,6 +2,7 @@
 
 var mdb = require('./mdb_client'),
     userdb = require('./userdb_client'),
+    redis_helper = require('./redis_helper'),
     fs = require('fs'),
     eventEmitter = require('events').EventEmitter,
     fs = require('fs'),

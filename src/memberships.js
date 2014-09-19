@@ -10,11 +10,11 @@ var mdb = require('./mdb_client'),
     redis = require("redis"),
     client = redis.createClient();
 
-module.exports.readSubscriptionMembersIntoRedis = function (callback) {
+module.exports.readSignupsIntoRedis = function (callback) {
   redis_helper.createListCopyFromMdb('tbl_signup_nyhedsbrev', 'signups', callback);
 };
 
-module.exports.readUnsubscriptionIntoRedis = function (callback) {
+module.exports.readSignoutsIntoRedis = function (callback) {
   redis_helper.createListCopyFromMdb('tbl_user_afmelding', 'signouts', callback);
 };
 

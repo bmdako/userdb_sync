@@ -32,25 +32,12 @@ workerEmitter.on('system_ready', function () {
   workerEmitter.emit('ready');
 });
 
-
-workerEmitter.on('findUser', findUser);
-workerEmitter.on('findUser_done', convertMember);
-workerEmitter.on('convertMember_done', convertEmail);
-workerEmitter.on('convertMember_done', convertTelefon);
-workerEmitter.on('convertMember_done', convertMobil);
-workerEmitter.on('convertMember_done', convertAddress);
-workerEmitter.on('convertMember_done', convertForeignKey);
-workerEmitter.on('convertMember_done', countUsers)
-workerEmitter.on('convertForeignKey_done', function () {
-  workerEmitter.emit('ready');
-});
-
-
+workerEmitter.on('ready', findUser);
 
 
 
 module.exports.readBrugereIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_bruger', 'brugere2', callback);
+  redis_helper.createListCopyFromMdb('tbl_bruger', 'brugere', callback);
 };
 
 module.exports.readInteresseLinierIntoRedis = function (callback) {
@@ -70,11 +57,7 @@ module.exports.readMembersUserIdMappingIntoRedis = function (callback) {
 
 
 module.exports.convertMembers = function (callback) {
-  workerEmitter.on('ready', function () {
-    workerEmitter.emit('findUser');
-  });
-
-  workerEmitter.on('findUser_empty', function () {
+  workerEmitter.on('empty', function () {
     // The callback might be the callback from gulp, so we fire of the callback to let gulp know the task is complete.
     if (callback !== undefined && typeof callback === 'function')
       callback();
@@ -91,15 +74,18 @@ function findUser () {
     process.exit(0);
   }
 
-  client.RPOP('brugere2', function (err, task) {
-  //client.RPOPLPUSH('brugere2', 'brugere2_done', function (err, task) {
+  client.RPOP('brugere', function (err, task) {
+  //client.RPOPLPUSH('brugere', 'brugere_done', function (err, task) {
     if (err) throw err;
 
     // List is empty
     if (task === null)
-      workerEmitter.emit('findUser_empty');
+      workerEmitter.emit('empty');
     else
-      workerEmitter.emit('findUser_done', task);
+      convertMember(task, function() {
+        countUsers();
+        workerEmitter.emit('ready');
+      });
   });
 }
 
@@ -118,7 +104,7 @@ function countUsers () {
 
 
 
-function convertMember (bruger) {
+function convertMember (bruger, callback) {
   var tbl_bruger = JSON.parse(bruger);
 
   client.HEXISTS('members', tbl_bruger.user_id, function (err, result) {
@@ -144,14 +130,19 @@ function convertMember (bruger) {
       }
 
       userdb.insert('member', member, function (err, result) {
-        var member_id = result.insertId;
 
-        client.HSET('members', tbl_bruger.user_id, member_id);
+        client.HSET('members', tbl_bruger.user_id, result.insertId);
 
-        workerEmitter.emit('convertMember_done', tbl_bruger, result.insertId);
+        convertEmail(tbl_bruger, result.insertId);
+        convertTelefon(tbl_bruger, result.insertId);
+        convertMobil(tbl_bruger, result.insertId);
+        convertAddress(tbl_bruger, result.insertId);
+        convertForeignKey(tbl_bruger, result.insertId);
+
+        callback();
       });
     } else {
-      workerEmitter.emit('ready');
+      callback();
     }
   });
 };
@@ -300,9 +291,7 @@ function convertForeignKey (tbl_bruger, member_id) {
     system_key: tbl_bruger.ekstern_id
   };
 
-  userdb.insert('foreign_key', foreign_key, function (err, result) {
-    workerEmitter.emit('convertForeignKey_done');
-  });
+  userdb.insert('foreign_key', foreign_key);
 }
 
 

@@ -114,7 +114,7 @@ var convertedMembers = 0,
 function countUsers () {
   if (++convertedMembers % splitter === 0) {
     var temp = Date.now();
-    console.log('Members converted:', convertedMembers, 'in', (temp - start) / 1000, '(' + splitter, 'in', (temp - splitTime) / 1000, 'seconds.)');
+    console.log('Members converted:', convertedMembers, 'in', (temp - start) / 1000, 'seconds. (' + splitter, 'in', (temp - splitTime) / 1000, 'seconds.)');
     splitTime = temp;
   }
 }
@@ -330,6 +330,7 @@ module.exports.convertInteresseLinier = function (callback) {
     if (interest_line === null)
       callback();
 
+    // tbl_interesse_linie.interesse_linie_id
     var tbl_interesse_linie = JSON.parse(interest_line);
 
     client.HGET('members', tbl_interesse_linie.user_id, function (err, member_id) {

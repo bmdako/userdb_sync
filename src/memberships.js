@@ -10,12 +10,11 @@ var mdb = require('./mdb_client'),
     redis = require("redis"),
     client = redis.createClient();
 
+
+
+
 module.exports.readSignupsIntoRedis = function (callback) {
   redis_helper.createListCopyFromMdb('tbl_signup_nyhedsbrev', 'signups', callback);
-};
-
-module.exports.readSignoutsIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_user_afmelding', 'signouts', callback);
 };
 
 
@@ -101,6 +100,11 @@ module.exports.convertSignups = function (callback) {
   });
 }
 
+
+
+module.exports.readSignoutsIntoRedis = function (callback) {
+  redis_helper.createListCopyFromMdb('tbl_user_afmelding', 'signouts', callback);
+};
 
 
 // mysql> show columns from unsub_reason;
@@ -216,4 +220,92 @@ module.exports.convertSignouts = function (callback) { //tbl_signup_nyhedsbrev, 
     }
   }
 }
+
+
+
+module.exports.readOptOutsIntoRedis = function (callback) {
+  redis_helper.createListCopyFromMdb('tbl_mail_optout', 'optouts', callback);
+};
+
+// mysql> show columns from opt_out_desc;
+// +-------------+------------------+------+-----+---------+----------------+
+// | Field       | Type             | Null | Key | Default | Extra          |
+// +-------------+------------------+------+-----+---------+----------------+
+// | id          | int(10) unsigned | NO   | PRI | NULL    | auto_increment |
+// | description | varchar(255)     | YES  |     | NULL    |                |
+// +-------------+------------------+------+-----+---------+----------------+
+
+// mysql> show columns from opt_outs;
+// +-----------+------------------+------+-----+-------------------+----------------+
+// | Field     | Type             | Null | Key | Default           | Extra          |
+// +-----------+------------------+------+-----+-------------------+----------------+
+// | id        | int(10) unsigned | NO   | PRI | NULL              | auto_increment |
+// | email_id  | int(10) unsigned | NO   | MUL | NULL              |                |
+// | timestamp | timestamp        | YES  |     | CURRENT_TIMESTAMP |                |
+// +-----------+------------------+------+-----+-------------------+----------------+
+
+
+//  mail_optout_id |               email               | type_id |         insert_ts          
+// ----------------+-----------------------------------+---------+----------------------------
+//            3140 | %email%                           |       1 | 2011-01-14 14:39:40.597789
+//            1650 | henrik@adnuvo.com                 |       1 | 2010-11-10 13:03:03.508472
+//            1651 | spe@berlingskemedia.dk            |       1 | 2010-11-09 17:20:57.548707
+//           48520 | lhbj@os.dk                        |       7 | 2013-07-12 10:25:16.727443
+//           23680 | annamariekjohansen@anarki.dk      |       2 | 2011-11-22 09:45:35.240032
+//            1654 | hg@pilgrim.dk                     |       1 | 2010-11-29 08:33:12.566904
+//            1655 | kres@kliniksalomonsen.dk          |       1 | 2010-11-29 08:34:20.175984
+//            1656 | josefineforsgren@gmail.com        |       1 | 2010-11-29 08:37:24.819349
+//            1657 | l_hauge@hotmail.com               |       1 | 2010-11-29 08:47:25.599159
+//            1658 | liselotte.ferdinandsen@tmj.dk     |       1 | 2010-11-29 08:48:35.922237
+//            1659 | iq@lite.dk                        |       1 | 2010-11-29 08:49:01.650809
+//            1660 | info@currivie.dk                  |       1 | 2010-11-29 08:51:13.889021
+//            1661 | ldrewsen@gmail.com                |       1 | 2010-11-29 08:52:59.136212
+
+//  type_id |                      type_desc                      
+// ---------+-----------------------------------------------------
+//        1 | Fordelsmail
+//        2 | Opdateringskampagne
+//        3 | Berlingske servicemails
+//        4 | BT servicemails
+//        5 | Århus Stiftstidende servicemails
+//        6 | AOK servicemails
+//        7 | Servicemails (alle publikationer)
+//        8 | Spørgeskema undersøgelser fra Medieanalyse, CRM mv.
+//       14 | Berlingske Business Direct mails
+//       15 | Ønsker ikke tilbud fra BT
+//       16 | Ønsker ikke tilbud fra Berlingske
+//       17 | Rejsemagasinet escape servicemails
+//       18 | Kids News servicemail
+// (13 rows)
+
+// TODO: test
+module.exports.convertOptOuts = function (callback) { // (tbl_bruger, member_id, email_id) {
+  var start = Date.now();
+
+  client.RPOP('optouts', function (err, optout) {
+
+    if (optout === null)
+      callback();
+
+    time(start, 'convertOptOuts - optout found.');
+
+    var tbl_mail_optout = JSON.parse(optout);
+
+
+    //mdb.query('SELECT mail_optout_id, insert_ts FROM tbl_mail_optout WHERE email =\'' + tbl_bruger.email + '\'', function (err, result) {
+    userdb.query('SELECT id FROM email WHERE email_address =\'' + tbl_mail_optout.email + '\'', function (err, result) {
+      if (result.length === 0) throw new Error('Email ' + tbl_mail_optout.email + ' not found');
+
+      var email_id = result[0].id;
+      var opt_outs = {
+        email_id: email_id,
+        timestamp: tbl_mail_optout.insert_ts
+      }
+
+      userdb.insert('opt_outs', opt_outs, function (err, result) {
+        time(start, 'convertOptOuts');
+      });
+    });
+  });
+};
 

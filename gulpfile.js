@@ -86,7 +86,7 @@ gulp.task('readSubscriptionMappingIntoRedis', function (callback) {
 
 gulp.task('members', ['']);
 
-gulp.task('convertMembers', ['readMembersUserIdMappingIntoRedis', 'readUserIdIntoRedis'], function (callback) {
+gulp.task('convertMembers', function (callback) {
   members.convertMembers(callback);
 });
 
@@ -105,6 +105,18 @@ gulp.task('convertUserActions', function (callback) {
   members.convertUserActions(callback);
 });
 
+gulp.task('readUserActionsIntoRedis', function (callback) {
+  members.readUserActionsIntoRedis(callback);
+});
+
+gulp.task('convertInteresseLinier', function (callback) {
+  members.convertInteresseLinier(callback);
+});
+
+gulp.task('readInteresseLinierIntoRedis', function (callback) {
+  members.readInteresseLinierIntoRedis(callback);
+});
+
 
 gulp.task('memberships', ['']);
 
@@ -112,14 +124,24 @@ gulp.task('convertSignups', ['readMembersUserIdMappingIntoRedis', 'readSignupsIn
   memberships.convertSignups(callback);
 });
 
-gulp.task('convertSignouts', ['readMembersUserIdMappingIntoRedis', 'readSignoutsIntoRedis'], function (callback) {
-  memberships.convertSignouts(callback);
-});
-
 gulp.task('readSignupsIntoRedis', function (callback) {
   memberships.readSignupsIntoRedis(callback);
+});
+
+gulp.task('convertSignouts', ['readMembersUserIdMappingIntoRedis', 'readSignoutsIntoRedis'], function (callback) {
+  memberships.convertSignouts(callback);
 });
 
 gulp.task('readSignoutsIntoRedis', function (callback) {
   memberships.readSignoutsIntoRedis(callback);
 });
+
+gulp.task('convertOptOuts', function (callback) {
+  memberships.convertOptOuts(callback);
+});
+
+gulp.task('readOptOutsIntoRedis', function (callback) {
+  memberships.readOptOutsIntoRedis(callback);
+});
+
+

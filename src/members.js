@@ -19,8 +19,15 @@ var system_id_mdb_sync = 1;
 
 
 function time(start, label) {
-  // console.log(label, 'time', (Date.now() - start) / 1000);
+  //console.log(label, 'time', (Date.now() - start) / 1000);
 }
+
+var _start = Date.now();
+function timer() {
+   // console.log('timer', (Date.now() - _start) / 1000);
+   // _start = Date.now();
+}
+
 
 workerEmitter.on('get_ready', createOrFindTelefonPhoneType);
 workerEmitter.on('telefon_ready', createOrFindMobilPhoneType);
@@ -31,18 +38,18 @@ workerEmitter.on('system_ready', function () {
 
 
 
+workerEmitter.on('ready', timer);
+
 workerEmitter.on('findUser', findUser);
 workerEmitter.on('findUser_done', convertMember);
 workerEmitter.on('convertMember_done', insertIntoRedisMemberHashMapping);
 workerEmitter.on('convertMember_done', convertEmail);
-//workerEmitter.on('convertEmail_done', convertOptOuts);
 workerEmitter.on('convertMember_done', convertTelefon);
 workerEmitter.on('convertMember_done', convertMobil);
 workerEmitter.on('convertMember_done', convertAddress);
 workerEmitter.on('convertMember_done', convertForeignKey);
-workerEmitter.on('convertMember_done', convertInteresseLinier);
-workerEmitter.on('convertMembers_done', countUsers)
-workerEmitter.on('convertInteresseLinier_done', function () {
+workerEmitter.on('convertMember_done', countUsers)
+workerEmitter.on('convertForeignKey_done', function () {
   workerEmitter.emit('ready');
 });
 
@@ -60,15 +67,22 @@ module.exports.readUserIdIntoRedis = function (callback) {
         ++pushed;
         if (pushed === count) {
           callback();
+
+        if (done % 100000 === 0)
+          console.log('List brugere imported: ' + done + '/' + count + '.');
         }
       });
     });
   });
 };
 
+module.exports.readBrugereIntoRedis = function (callback) {
+  redis_helper.createListCopyFromMdb('tbl_brugere', 'brugere2', callback);
+};
+
 module.exports.readMembersUserIdMappingIntoRedis = function (callback) {
   redis_helper.createHashMappingFromUserdb('SELECT mdb_user_id, id FROM member', 'members', callback);
-}
+};
 
 
 module.exports.convertMembers = function (callback) {
@@ -88,6 +102,7 @@ module.exports.convertMembers = function (callback) {
 
 
 function findUser () {
+  //client.RPOP('brugere', function (err, task) {
   client.RPOPLPUSH('brugere', 'brugere_done', function (err, task) {
     if (err) throw err;
 
@@ -102,7 +117,7 @@ function findUser () {
 
 var convertedMembers = 0;
 function countUsers () {
-  if (++convertedMembers % 1000 === 0) {
+  if (++convertedMembers % 100 === 0) {
     console.log('Members converted: ', convertedMembers);
     client.LLEN('brugere', function (err, length) {
       console.log('Members left:', length);
@@ -152,6 +167,8 @@ function convertMember (user_id) {
           time(start, 'convertMember');
         });
       });
+    } else {
+      workerEmitter.emit('ready');
     }
   });
 };
@@ -329,6 +346,9 @@ function convertForeignKey (tbl_bruger, member_id) {
 }
 
 
+module.exports.readInteresseLinierIntoRedis = function (callback) {
+  redis_helper.createListCopyFromMdb('tbl_interesse_linie', 'interest_lines', callback);
+};
 
 
 // mysql> show columns from interest_line;
@@ -344,121 +364,44 @@ function convertForeignKey (tbl_bruger, member_id) {
 // | updated_at  | datetime            | YES  |     | NULL              |                |
 // +-------------+---------------------+------+-----+-------------------+----------------+
 
-function convertInteresseLinier (tbl_bruger, member_id) {
+// TODO: test
+module.exports.convertInteresseLinier = function (callback) {
   var start = Date.now();
 
-  mdb.query('SELECT interesse_id, location_id, oprettet FROM tbl_interesse_linie WHERE user_id = ' + tbl_bruger.user_id, function (err, result) {
-    var count = result.rowCount,
-        done = 0;
+  client.RPOP('interest_lines', function (err, interest_line) {
+    if (interest_line === null)
+      callback();
 
-    if (count === 0)
-      workerEmitter.emit('convertInteresseLinier_done');
+    var tbl_interesse_linie = JSON.parse(interest_line);
 
-    result.rows.forEach(function (tbl_interesse_linie) {
+    client.HGET('members', tbl_interesse_linie.user_id, function (err, member_id) {
       client.HGET('interests', tbl_interesse_linie.interesse_id, function (err, interest_id) {
         client.HGET('locations', tbl_interesse_linie.location_id, function (err, location_id) {
 
           var interest_line = {
-            member_id: member_id,
-            interest_id: interest_id,
-            location_id: location_id,
+            member_id: parseInt(member_id),
+            interest_id: parseInt(interest_id),
+            location_id: parseInt(location_id),
             active: 1,
             created_at: tbl_interesse_linie.oprettet
           }
 
           userdb.insert('interest_line', interest_line, function (err, result) {
-
             time(start, 'convertInteresseLinier - insert interest_line');
-
-            ++done;
-            if (done === count)
-              workerEmitter.emit('convertInteresseLinier_done');
           });
         });
-      });
-    })
-  });
-}
-
-
-// mysql> show columns from opt_out_desc;
-// +-------------+------------------+------+-----+---------+----------------+
-// | Field       | Type             | Null | Key | Default | Extra          |
-// +-------------+------------------+------+-----+---------+----------------+
-// | id          | int(10) unsigned | NO   | PRI | NULL    | auto_increment |
-// | description | varchar(255)     | YES  |     | NULL    |                |
-// +-------------+------------------+------+-----+---------+----------------+
-
-// mysql> show columns from opt_outs;
-// +-----------+------------------+------+-----+-------------------+----------------+
-// | Field     | Type             | Null | Key | Default           | Extra          |
-// +-----------+------------------+------+-----+-------------------+----------------+
-// | id        | int(10) unsigned | NO   | PRI | NULL              | auto_increment |
-// | email_id  | int(10) unsigned | NO   | MUL | NULL              |                |
-// | timestamp | timestamp        | YES  |     | CURRENT_TIMESTAMP |                |
-// +-----------+------------------+------+-----+-------------------+----------------+
-
-
-//  mail_optout_id |               email               | type_id |         insert_ts          
-// ----------------+-----------------------------------+---------+----------------------------
-//            3140 | %email%                           |       1 | 2011-01-14 14:39:40.597789
-//            1650 | henrik@adnuvo.com                 |       1 | 2010-11-10 13:03:03.508472
-//            1651 | spe@berlingskemedia.dk            |       1 | 2010-11-09 17:20:57.548707
-//           48520 | lhbj@os.dk                        |       7 | 2013-07-12 10:25:16.727443
-//           23680 | annamariekjohansen@anarki.dk      |       2 | 2011-11-22 09:45:35.240032
-//            1654 | hg@pilgrim.dk                     |       1 | 2010-11-29 08:33:12.566904
-//            1655 | kres@kliniksalomonsen.dk          |       1 | 2010-11-29 08:34:20.175984
-//            1656 | josefineforsgren@gmail.com        |       1 | 2010-11-29 08:37:24.819349
-//            1657 | l_hauge@hotmail.com               |       1 | 2010-11-29 08:47:25.599159
-//            1658 | liselotte.ferdinandsen@tmj.dk     |       1 | 2010-11-29 08:48:35.922237
-//            1659 | iq@lite.dk                        |       1 | 2010-11-29 08:49:01.650809
-//            1660 | info@currivie.dk                  |       1 | 2010-11-29 08:51:13.889021
-//            1661 | ldrewsen@gmail.com                |       1 | 2010-11-29 08:52:59.136212
-
-//  type_id |                      type_desc                      
-// ---------+-----------------------------------------------------
-//        1 | Fordelsmail
-//        2 | Opdateringskampagne
-//        3 | Berlingske servicemails
-//        4 | BT servicemails
-//        5 | Århus Stiftstidende servicemails
-//        6 | AOK servicemails
-//        7 | Servicemails (alle publikationer)
-//        8 | Spørgeskema undersøgelser fra Medieanalyse, CRM mv.
-//       14 | Berlingske Business Direct mails
-//       15 | Ønsker ikke tilbud fra BT
-//       16 | Ønsker ikke tilbud fra Berlingske
-//       17 | Rejsemagasinet escape servicemails
-//       18 | Kids News servicemail
-// (13 rows)
-
-function convertOptOuts (tbl_bruger, member_id, email_id) {
-  var start = Date.now();
-
-  mdb.query('SELECT mail_optout_id, insert_ts FROM tbl_mail_optout WHERE email =\'' + tbl_bruger.email + '\'', function (err, result) {
-
-    var count = result.rowCount,
-        done = 0;
-
-    result.rows.forEach(function (tbl_mail_optout) {
-
-      var opt_outs = {
-        email_id: email_id,
-        timestamp: tbl_mail_optout.insert_ts
-      }
-
-      userdb.insert('opt_outs', opt_outs, function (err, result) {
-        time(start, 'convertOptOuts');
-
-        ++done;
-        if (done === count)
-          workerEmitter.emit('convertOptOuts_done');
       });
     });
   });
 };
 
 
+
+
+
+module.exports.readUserActionsIntoRedis = function (callback) {
+  redis_helper.createListCopyFromMdb('tbl_user_action', 'user_actions', callback);
+};
 
 
 // mysql> show columns from action_history;
@@ -476,27 +419,30 @@ function convertOptOuts (tbl_bruger, member_id, email_id) {
 module.exports.convertUserActions = function (callback) { // tbl_bruger, member_id
   var start = Date.now();
 
-  // TODO
-  mdb.select_all_from('tbl_user_action WHERE user_id = ' + tbl_bruger.user_id, function (err, result) {
-    time(start, 'convertUserActions - select_all_from ' + tbl_bruger.user_id);
-    result.rows.forEach(function(user_action) {
+  client.RPOP('user_actions', function (err, user_action) {
+    if (user_action === null)
+      callback();
 
-      var user_action_type_name = get_user_action_type_name(user_action.user_action_type_id);
+    time(start, 'convertUserActions - user_action found.');
 
+    var tbl_user_action = JSON.parse(user_action);
+
+    var user_action_type_name = get_user_action_type_name(tbl_user_action.user_action_type_id);
+    
+    client.HGET('members', tbl_user_action.user_id, function (err, member_id) {
       client.HGET('action_types', user_action_type_name, 'id', function (err, action_type_id) {
-        time(start, 'convertUserActions - HGET action_type');
 
         var action_history = {
-          member_id: member_id,
-          action_type_id: action_type_id,
-          description: user_action_type_name + '(' + user_action.user_action_id + ')',
-          created_at: user_action.oprettet,
-          info: 'MDB Value: ' + user_action.value
+          member_id: parseInt(member_id),
+          action_type_id: parseInt(action_type_id),
+          description: user_action_type_name + '(' + tbl_user_action.user_action_id + ')',
+          created_at: tbl_user_action.oprettet,
+          info: 'MDB Value: ' + tbl_user_action.value
         }
 
         // If the user action is a signoff, we might find user_feedback in tbl_user_afmelding.
-        if ([2,4].indexOf(user_action.user_action_type_id) > -1) {
-          mdb.select_all_from('tbl_user_afmelding WHERE user_id = ' + tbl_bruger.user_id + ' AND nyhedsbrev_id = ' + user_action.value, function (err, result) {
+        if ([2,4].indexOf(tbl_user_action.user_action_type_id) > -1) {
+          mdb.select_all_from('tbl_user_afmelding WHERE user_id = ' + tbl_user_action.user_id + ' AND nyhedsbrev_id = ' + tbl_user_action.value, function (err, result) {
             if (result.rowCount > 0) {
               action_history.info = result.rows[0].user_feedback;
               userdb.insert('action_history', action_history, function (err, result) {
@@ -516,7 +462,7 @@ module.exports.convertUserActions = function (callback) { // tbl_bruger, member_
       });
     });
   });
-}
+};
 
 function get_user_action_type_name (user_action_type_id) {
   switch (user_action_type_id) {

@@ -95,6 +95,10 @@ gulp.task('readUserIdIntoRedis', function (callback) {
   members.readUserIdIntoRedis(callback);
 });
 
+gulp.task('readBrugereIntoRedis', function (callback) {
+  members.readBrugereIntoRedis(callback);
+});
+
 // To be used for importing signups (subscription_member and permission_member), signouts and user_actions.
 gulp.task('readMembersUserIdMappingIntoRedis', function (callback) {
   members.readMembersUserIdMappingIntoRedis(callback);

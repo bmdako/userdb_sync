@@ -13,20 +13,16 @@ var mdb = require('./mdb_client'),
     // skipped_queue = 'convert_skipped',
 
 
+var exiting = false;
+process.on('SIGINT', function() {
+  if (exiting) process.exit(0); // If pressed twice.
+  exiting = true;
+});
+
 var phone_type_telefon = 1;
 var phone_type_mobil = 2;
 var system_id_mdb_sync = 1;
 
-
-function time(start, label) {
-  //console.log(label, 'time', (Date.now() - start) / 1000);
-}
-
-var _start = Date.now();
-function timer() {
-   // console.log('timer', (Date.now() - _start) / 1000);
-   // _start = Date.now();
-}
 
 
 workerEmitter.on('get_ready', createOrFindTelefonPhoneType);
@@ -37,12 +33,8 @@ workerEmitter.on('system_ready', function () {
 });
 
 
-
-workerEmitter.on('ready', timer);
-
 workerEmitter.on('findUser', findUser);
 workerEmitter.on('findUser_done', convertMember);
-workerEmitter.on('convertMember_done', insertIntoRedisMemberHashMapping);
 workerEmitter.on('convertMember_done', convertEmail);
 workerEmitter.on('convertMember_done', convertTelefon);
 workerEmitter.on('convertMember_done', convertMobil);
@@ -54,35 +46,30 @@ workerEmitter.on('convertForeignKey_done', function () {
 });
 
 
-module.exports.readUserIdIntoRedis = function (callback) {
-  client.DEL('brugere', 'brugere_done', function (err, result) {
-    mdb.query('SELECT user_id FROM tbl_bruger ORDER BY user_id', function (err, result) {
-      if (err) throw err;
 
-      var count = result.rows.length,
-          pushed = 0;
 
-      result.rows.forEach(function (tbl_bruger) {
-        client.LPUSH('brugere', tbl_bruger.user_id);
-        ++pushed;
-        if (pushed === count) {
-          callback();
-
-        if (done % 100000 === 0)
-          console.log('List brugere imported: ' + done + '/' + count + '.');
-        }
-      });
-    });
-  });
-};
 
 module.exports.readBrugereIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_brugere', 'brugere2', callback);
+  redis_helper.createListCopyFromMdb('tbl_bruger', 'brugere2', callback);
+};
+
+module.exports.readInteresseLinierIntoRedis = function (callback) {
+  redis_helper.createListCopyFromMdb('tbl_interesse_linie', 'interest_lines', callback);
+};
+
+module.exports.readUserActionsIntoRedis = function (callback) {
+  redis_helper.createListCopyFromMdb('tbl_user_action', 'user_actions', callback);
 };
 
 module.exports.readMembersUserIdMappingIntoRedis = function (callback) {
   redis_helper.createHashMappingFromUserdb('SELECT mdb_user_id, id FROM member', 'members', callback);
 };
+
+
+
+
+
+
 
 
 module.exports.convertMembers = function (callback) {
@@ -102,8 +89,13 @@ module.exports.convertMembers = function (callback) {
 
 
 function findUser () {
-  //client.RPOP('brugere', function (err, task) {
-  client.RPOPLPUSH('brugere', 'brugere_done', function (err, task) {
+  if (exiting) {
+    console.log('Exit clean.')
+    process.exit(0);
+  }
+
+  client.RPOP('brugere2', function (err, task) {
+  //client.RPOPLPUSH('brugere2', 'brugere2_done', function (err, task) {
     if (err) throw err;
 
     // List is empty
@@ -115,57 +107,51 @@ function findUser () {
 }
 
 
-var convertedMembers = 0;
+var convertedMembers = 0,
+    start = Date.now(),
+    splitTime = Date.now(),
+    splitter = 100;
 function countUsers () {
-  if (++convertedMembers % 100 === 0) {
-    console.log('Members converted: ', convertedMembers);
-    client.LLEN('brugere', function (err, length) {
-      console.log('Members left:', length);
-    });
+  if (++convertedMembers % splitter === 0) {
+    var temp = Date.now();
+    console.log('Members converted:', convertedMembers, 'in', (temp - start) / 1000, '(' + splitter, 'in', (temp - splitTime) / 1000, 'seconds.)');
+    splitTime = temp;
   }
 }
 
 
-function insertIntoRedisMemberHashMapping (tbl_bruger, member_id) {
-  client.HSET('members', tbl_bruger.user_id, member_id);
-}
 
+function convertMember (bruger) {
+  var tbl_bruger = JSON.parse(bruger);
 
-function convertMember (user_id) {
-  var start = Date.now();
-
-  client.HEXISTS('members', user_id, function (err, result) {
+  client.HEXISTS('members', tbl_bruger.user_id, function (err, result) {
     if (result === 0) {
-      mdb.query('SELECT * FROM tbl_bruger WHERE user_id = ' + user_id, function (err, result) {
-        var tbl_bruger = result.rows[0];
 
-        time(start, 'convertMember - select tbl_bruger done  ' + user_id);
+      var member = {
+        mdb_user_id: tbl_bruger.user_id,
+        firstname: tbl_bruger.fornavn,
+        lastname: tbl_bruger.efternavn,
+        coname: tbl_bruger.co_navn,
+        birth_year: tbl_bruger.foedselsaar,
+        birth_date: tbl_bruger.foedselsdato,
+        gender: tbl_bruger.koen,
+        username: tbl_bruger.brugernavn,
+        password: tbl_bruger.adgangskode,
+        status: tbl_bruger.active === true ? 'active' : 'inactive',
+        company: tbl_bruger.firma,
+        company_cvr: null, // TODO
+        is_internal: '0', // TODO: Test på email adresse eller lignede?
+        robinson_flag: tbl_bruger.robinson_flag === true ? '1' : '0',
+        activated_at: tbl_bruger.activate_dato,  // 'f' eller 't'
+        updated_at: tbl_bruger.opdatering_dato
+      }
 
-        var member = {
-          mdb_user_id: tbl_bruger.user_id,
-          firstname: tbl_bruger.fornavn,
-          lastname: tbl_bruger.efternavn,
-          coname: tbl_bruger.co_navn,
-          birth_year: tbl_bruger.foedselsaar,
-          birth_date: tbl_bruger.foedselsdato,
-          gender: tbl_bruger.koen,
-          username: tbl_bruger.brugernavn,
-          password: tbl_bruger.adgangskode,
-          status: tbl_bruger.active === true ? 'active' : 'inactive',
-          company: tbl_bruger.firma,
-          company_cvr: null, // TODO
-          is_internal: '0', // TODO: Test på email adresse eller lignede?
-          robinson_flag: tbl_bruger.robinson_flag === true ? '1' : '0',
-          activated_at: tbl_bruger.activate_dato,  // 'f' eller 't'
-          updated_at: tbl_bruger.opdatering_dato
-        }
+      userdb.insert('member', member, function (err, result) {
+        var member_id = result.insertId;
 
-        userdb.insert('member', member, function (err, result) {
-          var member_id = result.insertId;
+        client.HSET('members', tbl_bruger.user_id, member_id);
 
-          workerEmitter.emit('convertMember_done', tbl_bruger, result.insertId);
-          time(start, 'convertMember');
-        });
+        workerEmitter.emit('convertMember_done', tbl_bruger, result.insertId);
       });
     } else {
       workerEmitter.emit('ready');
@@ -188,8 +174,6 @@ function convertMember (user_id) {
 // +---------------+---------------------+------+-----+-------------------+----------------+
 
 function convertEmail (tbl_bruger, member_id) {
-  var start = Date.now();
-
   var email = {
     member_id: member_id,
     email_address: tbl_bruger.email,
@@ -197,10 +181,7 @@ function convertEmail (tbl_bruger, member_id) {
     active: 1
   };
 
-  userdb.insert( 'email', email, function (err, result) {
-    time(start, 'convertEmail');
-    workerEmitter.emit('convertEmail_done', tbl_bruger, member_id, result.insertId);
-  });
+  userdb.insert('email', email);
 }
 
 
@@ -218,8 +199,6 @@ function convertEmail (tbl_bruger, member_id) {
 // +------------+------------------+------+-----+-------------------+----------------+
 
 function convertTelefon (tbl_bruger, member_id) {
-  var start = Date.now();
-
   if (tbl_bruger.telefon !== null && tbl_bruger.telefon !== '') {
 
     var telefon = {
@@ -230,16 +209,11 @@ function convertTelefon (tbl_bruger, member_id) {
       status: 1
     };
 
-    userdb.insert('phone', telefon, function (err, result) {
-      time(start, 'convertTelefon time');
-      workerEmitter.emit('convertTelefon_done');
-    });
+    userdb.insert('phone', telefon);
   }
 }
 
 function convertMobil (tbl_bruger, member_id) {
-  var start = Date.now();
-
   if (tbl_bruger.mobil !== null && tbl_bruger.mobil !== '') {
 
     var mobil = {
@@ -250,10 +224,7 @@ function convertMobil (tbl_bruger, member_id) {
       status: 1
     }
 
-    userdb.insert('phone', mobil, function (err, result) {
-      time(start, 'convertMobil');
-      workerEmitter.emit('convertMobil_done');
-    });
+    userdb.insert('phone', mobil);
   }
 }
 
@@ -281,8 +252,6 @@ function convertMobil (tbl_bruger, member_id) {
 // +---------------+----------------------------+------+-----+---------+----------------+
 
 function convertAddress (tbl_bruger, member_id) {
-  var start = Date.now();
-
   var postal_number = tbl_bruger.postnummer_dk !== null && tbl_bruger.postnummer_dk !== 0 ? tbl_bruger.postnummer_dk.toString()
     : tbl_bruger.postnummer !== '' ? tbl_bruger.postnummer
     : null;
@@ -312,10 +281,7 @@ function convertAddress (tbl_bruger, member_id) {
       country_code: null
     };
 
-    userdb.insert('address', address, function (err, result) {
-      time(start, 'convertAddress');
-      workerEmitter.emit('convertAddress_done');
-    });
+    userdb.insert('address', address);
   }
 }
 
@@ -331,8 +297,6 @@ function convertAddress (tbl_bruger, member_id) {
 // +------------+------------------+------+-----+---------+----------------+
 
 function convertForeignKey (tbl_bruger, member_id) {
-  var start = Date.now();
-
   var foreign_key = {
     system_id: system_id_mdb_sync,
     member_id: member_id,
@@ -340,15 +304,11 @@ function convertForeignKey (tbl_bruger, member_id) {
   };
 
   userdb.insert('foreign_key', foreign_key, function (err, result) {
-    time(start, 'convertForeignKey');
     workerEmitter.emit('convertForeignKey_done');
   });
 }
 
 
-module.exports.readInteresseLinierIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_interesse_linie', 'interest_lines', callback);
-};
 
 
 // mysql> show columns from interest_line;
@@ -366,8 +326,6 @@ module.exports.readInteresseLinierIntoRedis = function (callback) {
 
 // TODO: test
 module.exports.convertInteresseLinier = function (callback) {
-  var start = Date.now();
-
   client.RPOP('interest_lines', function (err, interest_line) {
     if (interest_line === null)
       callback();
@@ -386,9 +344,7 @@ module.exports.convertInteresseLinier = function (callback) {
             created_at: tbl_interesse_linie.oprettet
           }
 
-          userdb.insert('interest_line', interest_line, function (err, result) {
-            time(start, 'convertInteresseLinier - insert interest_line');
-          });
+          userdb.insert('interest_line', interest_line);
         });
       });
     });
@@ -396,12 +352,6 @@ module.exports.convertInteresseLinier = function (callback) {
 };
 
 
-
-
-
-module.exports.readUserActionsIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_user_action', 'user_actions', callback);
-};
 
 
 // mysql> show columns from action_history;
@@ -417,13 +367,9 @@ module.exports.readUserActionsIntoRedis = function (callback) {
 // +----------------+---------------------+------+-----+---------+----------------+
 
 module.exports.convertUserActions = function (callback) { // tbl_bruger, member_id
-  var start = Date.now();
-
   client.RPOP('user_actions', function (err, user_action) {
     if (user_action === null)
       callback();
-
-    time(start, 'convertUserActions - user_action found.');
 
     var tbl_user_action = JSON.parse(user_action);
 
@@ -445,19 +391,13 @@ module.exports.convertUserActions = function (callback) { // tbl_bruger, member_
           mdb.select_all_from('tbl_user_afmelding WHERE user_id = ' + tbl_user_action.user_id + ' AND nyhedsbrev_id = ' + tbl_user_action.value, function (err, result) {
             if (result.rowCount > 0) {
               action_history.info = result.rows[0].user_feedback;
-              userdb.insert('action_history', action_history, function (err, result) {
-                time(start, 'convertUserActions - insert 1');
-              });
+              userdb.insert('action_history', action_history);
             } else {
-              userdb.insert('action_history', action_history, function (err, result) {
-                time(start, 'convertUserActions - insert 2');
-              });
+              userdb.insert('action_history', action_history);
             }
           }); 
         } else {
-          userdb.insert('action_history', action_history, function (err, result) {
-            time(start, 'convertUserActions - insert 3');
-          });
+          userdb.insert('action_history', action_history);
         }
       });
     });

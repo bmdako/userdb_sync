@@ -35,7 +35,7 @@ module.exports.createListCopyFromMdb = function (tableName, listName, callback) 
         ++done;
 
         if (done === count) {
-          console.log('Done ' + listName, count, offset, limit);
+          console.log('Imported ', count, ' into ', listName, count, ' continuing from ', offset);
           ee.emit('next');
         }
       });

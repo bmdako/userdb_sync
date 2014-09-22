@@ -49,14 +49,10 @@ module.exports.readSignupsIntoRedis = function (callback) {
 // +-----------------+---------------------+------+-----+---------+----------------+
 
 module.exports.convertSignups = function (callback) {
-  var start = Date.now();
-
   client.RPOP('signups', function (err, signup) {
 
     if (signup === null)
       callback();
-
-    time(start, 'convertSignups - signup found.');
 
     var tbl_signup_nyhedsbrev = JSON.parse(signup);
 
@@ -82,13 +78,11 @@ module.exports.convertSignups = function (callback) {
               if (is_subscription) {
                 x_member.subscription_id = result;
                 userdb.insert('subscription_member', x_member, function (err, result) {
-                  time(start, 'convertSignups - subscription membership_inserted ' + tbl_bruger.user_id);
                   //workerEmitter.emit('convertSignups_done', tbl_signup_nyhedsbrev, member_id, false, result.insertId);
                 });
               } else {
                 x_member.permission_id = result;
                 userdb.insert('permission_member', x_member, function (err, result) {
-                  time(start, 'convertSignups - permission membership_inserted ' + tbl_bruger.user_id);
                   //workerEmitter.emit('convertSignups_done', tbl_signup_nyhedsbrev, member_id, true, result.insertId);
                 });
               }
@@ -139,14 +133,10 @@ module.exports.readSignoutsIntoRedis = function (callback) {
 //                 20 | 2010998 |           108 |           1 | Jeg er blevet tilmeldt ved en fejl                         
 
 module.exports.convertSignouts = function (callback) { //tbl_signup_nyhedsbrev, member_id, is_permission, membership_id
-  var start = Date.now();
-
   client.RPOP('signouts', function (err, signout) {
 
     if (signout === null)
       callback();
-
-    time(start, 'convertSignouts - signout found.');
 
     var tbl_user_afmelding = JSON.parse(signout);
 
@@ -189,7 +179,6 @@ module.exports.convertSignouts = function (callback) { //tbl_signup_nyhedsbrev, 
               client.HGET('reason_types', reason, function (err, reason_type_id) {
                 unsub_reason.reason_type_id = reason_type_id;
                 userdb.insert('unsub_reason', unsub_reason, updateMembership);
-                time(start, 'convertSignouts - unsub_reason inserted');
               });
             });
           });
@@ -199,8 +188,6 @@ module.exports.convertSignouts = function (callback) { //tbl_signup_nyhedsbrev, 
   });
 
   function updateMembership(err, result) {
-    var start = Date.now();
-
     var x_member = {
       id: this.membership_id,
       signout_dato: this.tbl_signup_nyhedsbrev.signout_dato,
@@ -211,11 +198,9 @@ module.exports.convertSignouts = function (callback) { //tbl_signup_nyhedsbrev, 
 
     if (is_permission) {
       userdb.update('permission_member', x_member, function (err, result) {
-        time(start, 'updateMembership permission');
       });
     } else {
       userdb.update('subscription_member', x_member, function (err, result) {
-        time(start, 'updateMembership substring');
       });
     }
   }
@@ -280,14 +265,10 @@ module.exports.readOptOutsIntoRedis = function (callback) {
 
 // TODO: test
 module.exports.convertOptOuts = function (callback) { // (tbl_bruger, member_id, email_id) {
-  var start = Date.now();
-
   client.RPOP('optouts', function (err, optout) {
 
     if (optout === null)
       callback();
-
-    time(start, 'convertOptOuts - optout found.');
 
     var tbl_mail_optout = JSON.parse(optout);
 
@@ -302,9 +283,7 @@ module.exports.convertOptOuts = function (callback) { // (tbl_bruger, member_id,
         timestamp: tbl_mail_optout.insert_ts
       }
 
-      userdb.insert('opt_outs', opt_outs, function (err, result) {
-        time(start, 'convertOptOuts');
-      });
+      userdb.insert('opt_outs', opt_outs);
     });
   });
 };

@@ -69,9 +69,6 @@ module.exports.readMembersUserIdMappingIntoRedis = function (callback) {
 
 
 
-
-
-
 module.exports.convertMembers = function (callback) {
   workerEmitter.on('ready', function () {
     workerEmitter.emit('findUser');
@@ -310,7 +307,6 @@ function convertForeignKey (tbl_bruger, member_id) {
 
 
 
-
 // mysql> show columns from interest_line;
 // +-------------+---------------------+------+-----+-------------------+----------------+
 // | Field       | Type                | Null | Key | Default           | Extra          |
@@ -334,20 +330,23 @@ module.exports.convertInteresseLinier = function (callback) {
     var tbl_interesse_linie = JSON.parse(interest_line);
 
     client.HGET('members', tbl_interesse_linie.user_id, function (err, member_id) {
-      client.HGET('interests', tbl_interesse_linie.interesse_id, function (err, interest_id) {
-        client.HGET('locations', tbl_interesse_linie.location_id, function (err, location_id) {
+      if (member_id !== null) {
 
-          var interest_line = {
-            member_id: parseInt(member_id),
-            interest_id: parseInt(interest_id),
-            location_id: parseInt(location_id),
-            active: 1,
-            created_at: tbl_interesse_linie.oprettet
-          }
+        client.HGET('interests', tbl_interesse_linie.interesse_id, function (err, interest_id) {
+          client.HGET('locations', tbl_interesse_linie.location_id, function (err, location_id) {
 
-          userdb.insert('interest_line', interest_line);
+            var interest_line = {
+              member_id: parseInt(member_id),
+              interest_id: parseInt(interest_id),
+              location_id: parseInt(location_id),
+              active: 1,
+              created_at: tbl_interesse_linie.oprettet
+            }
+
+            userdb.insert('interest_line', interest_line);
+          });
         });
-      });
+      }
     });
   });
 };
@@ -367,7 +366,7 @@ module.exports.convertInteresseLinier = function (callback) {
 // | info           | text                | YES  |     | NULL    |                |
 // +----------------+---------------------+------+-----+---------+----------------+
 
-module.exports.convertUserActions = function (callback) { // tbl_bruger, member_id
+module.exports.convertUserActions = function (callback) {
   client.RPOP('user_actions', function (err, user_action) {
     if (user_action === null)
       callback();

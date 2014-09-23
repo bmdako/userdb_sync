@@ -48,7 +48,7 @@ module.exports.readUserActionsIntoRedis = function (callback) {
   redis_helper.createListCopyFromMdb('tbl_user_action', 'user_actions', callback);
 };
 
-module.exports.readMembersUserIdMappingIntoRedis = function (callback) {
+module.exports.mapMembersIntoRedis = function (callback) {
   redis_helper.createHashMappingFromUserdb('SELECT mdb_user_id, id FROM member', 'members', callback);
 };
 

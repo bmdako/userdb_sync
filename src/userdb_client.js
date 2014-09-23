@@ -58,7 +58,12 @@ module.exports.insert = function (tableName, data, callback) {
   // }
 
   var sql = insertSqlString(tableName, data);
-  pool.query(sql, callback);
+  pool.query(sql, function (err, result) {
+    if (err)
+      throw err;
+    else if (callback !== undefined && typeof callback === 'function')
+     callback(err, result);
+  });
 }
 
 

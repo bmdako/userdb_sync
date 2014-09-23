@@ -18,6 +18,12 @@ module.exports.readSignupsIntoRedis = function (callback) {
 };
 
 
+module.exports.readSignoutsIntoRedis = function (callback) {
+  redis_helper.createListCopyFromMdb('tbl_user_afmelding', 'signouts', callback);
+};
+
+
+
 // mysql> show columns from subscription_member;
 // +-----------------+---------------------+------+-----+---------+----------------+
 // | Field           | Type                | Null | Key | Default | Extra          |
@@ -94,11 +100,6 @@ module.exports.convertSignups = function (callback) {
   });
 }
 
-
-
-module.exports.readSignoutsIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_user_afmelding', 'signouts', callback);
-};
 
 
 // mysql> show columns from unsub_reason;

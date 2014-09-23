@@ -12,50 +12,61 @@ gulp.task('default', [
 });
 
 
-gulp.task('systemdata', []);
 
-gulp.task('convertLocations', ['readLocationMappingIntoRedis'], function (callback) {
+// Needs:
+// - mapLocationsIntoRedis
+gulp.task('convertLocations', function (callback) {
   systemdata.convertLocations(callback);
 });
 
-gulp.task('readLocationMappingIntoRedis', function (callback) {
-  systemdata.readLocationMappingIntoRedis(callback);
+gulp.task('mapLocationsIntoRedis', function (callback) {
+  systemdata.mapLocationsIntoRedis(callback);
 });
 
-gulp.task('convertReasonTypes', ['readReasonTypeMappingIntoRedis'], function (callback) {
+// Needs:
+// - mapReasonTypeIntoRedis
+gulp.task('convertReasonTypes', function (callback) {
   systemdata.convertReasonTypes(callback);
 });
 
-gulp.task('readReasonTypeMappingIntoRedis', function (callback) {
-  systemdata.readReasonTypeMappingIntoRedis(callback);
+gulp.task('mapReasonTypeIntoRedis', function (callback) {
+  systemdata.mapReasonTypeIntoRedis(callback);
 });
 
-gulp.task('convertActionTypes', ['readActionTypeMappingIntoRedis'], function (callback) {
+
+// Needs:
+// - mapActionTypeIntoRedis
+gulp.task('convertActionTypes', function (callback) {
   systemdata.convertActionTypes(callback);
 });
 
-gulp.task('readActionTypeMappingIntoRedis', function (callback) {
-  systemdata.readActionTypeMappingIntoRedis(callback);
+gulp.task('mapActionTypeIntoRedis', function (callback) {
+  systemdata.mapActionTypeIntoRedis(callback);
 });
 
-gulp.task('convertInterests', ['readInterestMappingIntoRedis'], function (callback) {
+
+// Needs:
+// - mapInterestIntoRedis
+gulp.task('convertInterests', function (callback) {
   systemdata.convertInterests(callback);
 });
 
-gulp.task('readInterestMappingIntoRedis', function (callback) {
-  systemdata.readInterestMappingIntoRedis(callback);
+gulp.task('mapInterestIntoRedis', function (callback) {
+  systemdata.mapInterestIntoRedis(callback);
 });
 
+// Needs:
+// - mapPermissionIntoRedis
 gulp.task('convertInterestParents', function (callback) {
   systemdata.convertInterestParents(callback);
 });
 
-gulp.task('convertPermissions', ['readPermissionMappingIntoRedis'], function (callback) {
+gulp.task('convertPermissions', function (callback) {
   systemdata.convertPermissions(callback);
 });
 
-gulp.task('readPermissionMappingIntoRedis', function (callback) {
-  systemdata.readPermissionMappingIntoRedis(callback);
+gulp.task('mapPermissionIntoRedis', function (callback) {
+  systemdata.mapPermissionIntoRedis(callback);
 });
 
 
@@ -63,45 +74,42 @@ gulp.task('readPermissionMappingIntoRedis', function (callback) {
 
 
 
-gulp.task('publishers', ['convertPublishers', 'convertSubscriptions']);
-
-gulp.task('convertPublishers', ['readPublisherMappingIntoRedis'], function (callback) {
+// Needs:
+// - mapPublisherIntoRedis
+gulp.task('convertPublishers', function (callback) {
   publishers.convertPublishers(callback);
 });
 
-gulp.task('readPublisherMappingIntoRedis', function (callback) {
-  publishers.readPublisherMappingIntoRedis(callback);
+gulp.task('mapPublisherIntoRedis', function (callback) {
+  publishers.mapPublisherIntoRedis(callback);
 });
 
-gulp.task('convertSubscriptions', ['readSubscriptionMappingIntoRedis'], function (callback) {
+// Needs:
+// - mapSubscriptionIntoRedis
+gulp.task('convertSubscriptions', function (callback) {
   publishers.convertSubscriptions(callback);
 });
 
-gulp.task('readSubscriptionMappingIntoRedis', function (callback) {
-  publishers.readSubscriptionMappingIntoRedis(callback);
+gulp.task('mapSubscriptionIntoRedis', function (callback) {
+  publishers.mapSubscriptionIntoRedis(callback);
 });
 
 
 
-
-gulp.task('members', ['']);
-
+// Needs:
+// - readBrugereIntoRedis
+// - mapMembersIntoRedis
 gulp.task('convertMembers', function (callback) {
   members.convertMembers(callback);
-});
-
-// Bruger import-list
-gulp.task('readUserIdIntoRedis', function (callback) {
-  members.readUserIdIntoRedis(callback);
 });
 
 gulp.task('readBrugereIntoRedis', function (callback) {
   members.readBrugereIntoRedis(callback);
 });
 
-// To be used for importing signups (subscription_member and permission_member), signouts and user_actions.
-gulp.task('readMembersUserIdMappingIntoRedis', function (callback) {
-  members.readMembersUserIdMappingIntoRedis(callback);
+// Also, To be used for importing signups (subscription_member and permission_member), signouts and user_actions.
+gulp.task('mapMembersIntoRedis', function (callback) {
+  members.mapMembersIntoRedis(callback);
 });
 
 
@@ -113,6 +121,11 @@ gulp.task('readUserActionsIntoRedis', function (callback) {
   members.readUserActionsIntoRedis(callback);
 });
 
+
+// Needs:
+// - mapMembersIntoRedis
+// - readInteresseLinierIntoRedis
+// - mapLocationsIntoRedis
 gulp.task('convertInteresseLinier', function (callback) {
   members.convertInteresseLinier(callback);
 });
@@ -122,9 +135,12 @@ gulp.task('readInteresseLinierIntoRedis', function (callback) {
 });
 
 
-gulp.task('memberships', ['']);
 
-gulp.task('convertSignups', ['readMembersUserIdMappingIntoRedis', 'readSignupsIntoRedis'], function (callback) {
+
+// Needs:
+// - mapMembersIntoRedis
+// - readSignupsIntoRedis
+gulp.task('convertSignups', function (callback) {
   memberships.convertSignups(callback);
 });
 
@@ -132,7 +148,12 @@ gulp.task('readSignupsIntoRedis', function (callback) {
   memberships.readSignupsIntoRedis(callback);
 });
 
-gulp.task('convertSignouts', ['readMembersUserIdMappingIntoRedis', 'readSignoutsIntoRedis'], function (callback) {
+
+
+// Needs:
+// - mapMembersIntoRedis
+// - readSignoutsIntoRedis
+gulp.task('convertSignouts', function (callback) {
   memberships.convertSignouts(callback);
 });
 
@@ -140,6 +161,11 @@ gulp.task('readSignoutsIntoRedis', function (callback) {
   memberships.readSignoutsIntoRedis(callback);
 });
 
+
+
+// Needs:
+// - mapMembersIntoRedis
+// - readOptOutsIntoRedis
 gulp.task('convertOptOuts', function (callback) {
   memberships.convertOptOuts(callback);
 });

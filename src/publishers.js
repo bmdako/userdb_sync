@@ -11,12 +11,12 @@ var mdb = require('./mdb_client'),
     client = redis.createClient();
 
 
-module.exports.readPublisherMappingIntoRedis = function (callback) {
+module.exports.mapPublisherIntoRedis = function (callback) {
   redis_helper.createHashMappingFromUserdb('SELECT mdb_publisher_id, id FROM publisher', 'publishers', callback);
 };
 
 
-module.exports.readSubscriptionMappingIntoRedis = function (callback) {
+module.exports.mapSubscriptionIntoRedis = function (callback) {
   redis_helper.createHashMappingFromUserdb('SELECT mdb_nyhedsbrev_id, id FROM subscription', 'subscriptions', callback);
 };
 

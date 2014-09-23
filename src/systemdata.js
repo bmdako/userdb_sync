@@ -12,23 +12,23 @@ var mdb = require('./mdb_client'),
 
 
 
-module.exports.readLocationMappingIntoRedis = function (callback) {
+module.exports.mapLocationsIntoRedis = function (callback) {
   redis_helper.createHashMappingFromUserdb('SELECT mdb_location_id, id FROM location', 'locations', callback);
 };
 
-module.exports.readPermissionMappingIntoRedis = function (callback) {
+module.exports.mapPermissionIntoRedis = function (callback) {
   redis_helper.createHashMappingFromUserdb('SELECT mdb_nyhedsbrev_id, id FROM permission', 'permissions', callback);
 };
 
-module.exports.readInterestMappingIntoRedis = function (callback) {
+module.exports.mapInterestIntoRedis = function (callback) {
   redis_helper.createHashMappingFromUserdb('SELECT mdb_interesse_id, id FROM interest', 'interests', callback);
 };
 
-module.exports.readActionTypeMappingIntoRedis = function (callback) {
+module.exports.mapActionTypeIntoRedis = function (callback) {
   redis_helper.createHashMappingFromUserdb('SELECT description, id FROM action_type', 'action_types', callback);
 };
 
-module.exports.readReasonTypeMappingIntoRedis = function (callback) {
+module.exports.mapReasonTypeIntoRedis = function (callback) {
   redis_helper.createHashMappingFromUserdb('SELECT text, id FROM reason_type', 'reason_types', callback);
 };
 

@@ -23,21 +23,22 @@ module.exports.createListCopyFromMdb = function (tableName, listName, callback) 
     mdb.select_all_from( tableName + ' LIMIT ' + limit + ' OFFSET ' + offset, function (err, result) {
       if (err) throw err;
       
-      var count = result.rowCount,
-          done = 0;
-
       if (result.rowCount === 0) {
         ee.emit('done');
       }
 
-      result.rows.forEach(function (row) {
-        client.LPUSH(listName, JSON.stringify(row));
-        ++done;
+      var count = result.rowCount,
+          done = 0;
 
-        if (done === count) {
-          console.log('Imported', count, 'into', listName, '. Continuing from', offset);
-          ee.emit('next');
-        }
+      result.rows.forEach(function (row) {
+        client.LPUSH(listName, JSON.stringify(row), function (err, result) {
+          ++done;
+
+          if (done === count) {
+            console.log('Imported', count, 'into', listName, '. Continuing from', offset);
+            ee.emit('next');
+          }
+        });
       });
       offset = offset + limit;
     });
@@ -61,6 +62,8 @@ module.exports.createHashMappingFromUserdb = function (sql, hashName, callback) 
 
       data.forEach(function (item) {
         client.HSET(hashName, item[Object.keys(item)[0]], item[Object.keys(item)[1]], function (err, result) {
+          if (err) throw err;
+
           ++done;
           if (done === count) {
             console.log('Hash ' + hashName + ' done.');

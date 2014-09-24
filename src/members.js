@@ -334,35 +334,57 @@ function convertForeignKey (tbl_bruger, member_id) {
 
 // TODO: test
 module.exports.convertInteresseLinier = function (callback) {
-  client.RPOP('tbl_interesse_linie', function (err, data) {
-    if (data === null)
-      return callback();
+  work();
 
-    // tbl_interesse_linie.interesse_linie_id
-    var tbl_interesse_linie = JSON.parse(data);
+  function work () {
+    client.RPOP('tbl_interesse_linie', function (err, data) {
+      
+      if (data === null)
+        return callback();
 
-    client.HGET('members', tbl_interesse_linie.user_id, function (err, member_id) {
-      if (member_id !== null) {
+      var tbl_interesse_linie = JSON.parse(data);
 
-        client.HGET('interests', tbl_interesse_linie.interesse_id, function (err, interest_id) {
-          client.HGET('locations', tbl_interesse_linie.location_id, function (err, location_id) {
 
-            //userdb.query('SELECT id FROM interest_line')
+      client.HGET('members', tbl_interesse_linie.user_id, function (err, member_id) {
+        if (member_id !== null) {
 
-            var interest_line = {
-              member_id: parseInt(member_id),
-              interest_id: parseInt(interest_id),
-              location_id: parseInt(location_id),
-              active: 1,
-              created_at: tbl_interesse_linie.oprettet
-            }
+          client.HGET('interests', tbl_interesse_linie.interesse_id, function (err, interest_id) {
+            client.HGET('locations', tbl_interesse_linie.location_id, function (err, location_id) {
 
-            userdb.insert('interest_line', interest_line);
+              var interest_line = {
+                member_id: parseInt(member_id),
+                interest_id: parseInt(interest_id),
+                location_id: parseInt(location_id),
+                active: 1,
+                created_at: tbl_interesse_linie.oprettet
+              }
+
+              // We could evalute on tbl_interesse_linie.interesse_linie_id
+              // instead of doing the userdb.query below, to see if
+
+              userdb.query('SELECT id FROM interest_line' +
+                ' WHERE member_id= ' + interest_line.member_id +
+                ' AND interest_id = ' + interest_line.interest_id +
+                ' AND location_id = ' + interest_line.location_id, function (err, result) {
+                  if (err) throw err;
+
+                  if (result.length === 0) {
+                    userdb.insert('interest_line', interest_line);
+                  }
+
+                  work();
+                  return;
+                });
+            });
           });
-        });
-      }
+        } else {
+          
+          work();
+          return;
+        }
+      });
     });
-  });
+  }
 };
 
 
@@ -381,41 +403,60 @@ module.exports.convertInteresseLinier = function (callback) {
 // +----------------+---------------------+------+-----+---------+----------------+
 
 module.exports.convertUserActions = function (callback) {
-  client.RPOP('tbl_user_action', function (err, data) {
-    if (data === null)
-      return callback();
+  work();
 
-    var tbl_user_action = JSON.parse(data);
+  function work () {
+    client.RPOP('tbl_user_action', function (err, data) {
 
-    var user_action_type_name = get_user_action_type_name(tbl_user_action.user_action_type_id);
-    
-    client.HGET('members', tbl_user_action.user_id, function (err, member_id) {
-      client.HGET('action_types', user_action_type_name, 'id', function (err, action_type_id) {
+      if (data === null)
+        return callback();
 
-        var action_history = {
-          member_id: parseInt(member_id),
-          action_type_id: parseInt(action_type_id),
-          description: user_action_type_name + '(' + tbl_user_action.user_action_id + ')',
-          created_at: tbl_user_action.oprettet,
-          info: 'MDB Value: ' + tbl_user_action.value
-        }
+      var tbl_user_action = JSON.parse(data);
 
-        // If the user action is a signoff, we might find user_feedback in tbl_user_afmelding.
-        if ([2,4].indexOf(tbl_user_action.user_action_type_id) > -1) {
-          mdb.select_all_from('tbl_user_afmelding WHERE user_id = ' + tbl_user_action.user_id + ' AND nyhedsbrev_id = ' + tbl_user_action.value, function (err, result) {
-            if (result.rowCount > 0) {
-              action_history.info = result.rows[0].user_feedback;
-              userdb.insert('action_history', action_history);
+      var user_action_type_name = get_user_action_type_name(tbl_user_action.user_action_type_id);
+      
+      client.HGET('members', tbl_user_action.user_id, function (err, member_id) {
+        if (member_id !== null) {
+
+          client.HGET('action_types', user_action_type_name, 'id', function (err, action_type_id) {
+
+            var action_history = {
+              member_id: parseInt(member_id),
+              action_type_id: parseInt(action_type_id),
+              description: user_action_type_name + '(' + tbl_user_action.user_action_id + ')',
+              created_at: tbl_user_action.oprettet,
+              info: 'MDB Value: ' + tbl_user_action.value
+            }
+
+            // If the user action is a signoff, we might find user_feedback in tbl_user_afmelding.
+            if ([2,4].indexOf(tbl_user_action.user_action_type_id) > -1) {
+              mdb.select_all_from('tbl_user_afmelding WHERE user_id = ' + tbl_user_action.user_id + ' AND nyhedsbrev_id = ' + tbl_user_action.value, function (err, result) {
+                if (result.rowCount > 0) {
+                  action_history.info = result.rows[0].user_feedback;
+                  userdb.insert('action_history', action_history);
+                } else {
+                  userdb.insert('action_history', action_history);
+                }
+              });
+              
+              work();
+              return;
+
             } else {
               userdb.insert('action_history', action_history);
+              
+              work();
+              return;
             }
-          }); 
+          });
         } else {
-          userdb.insert('action_history', action_history);
+
+          work();
+          return;
         }
       });
     });
-  });
+  }
 };
 
 function get_user_action_type_name (user_action_type_id) {
@@ -504,4 +545,62 @@ function createMdbSyncSystem () {
     }
   });
 }
+
+
+
+
+
+module.exports.tutu = function (callback) {
+  next();
+
+  function next () {
+    client.RPOP('tbl_bruger', function (err, bruger) {
+      if (bruger === null)
+        callback();
+
+      var tbl_bruger = JSON.parse(bruger);
+
+      client.HEXISTS('members', tbl_bruger.user_id, function (err, exists) {
+        if (exists === 0) {
+          console.log('Not found in Redis ' + tbl_bruger.user_id);
+          // throw new Error('Not found in Redis ' + tbl_bruger.user_id);
+        }
+
+        next();
+      });
+    });
+  }
+};
+
+module.exports.kaka = function (callback) {
+  console.log('started');
+
+  userdb.query('SELECT mdb_user_id FROM member', function (err, members) {
+    var count = members.length,
+        done = 0;
+
+    console.log('length', count);
+    members.forEach(function(member) {
+      //console.log('user_id', user_id);
+      client.HEXISTS('members', member.mdb_user_id, function (err, exists) {
+        console.log('exists', exists);
+        //console.log('member', member);
+        if (exists === 0)
+          console.log('Not found in Redis', member.mdb_user_id);
+
+        ++done;
+        if (done === count) {
+          console.log('done', done);
+          callback();
+        }
+      });
+
+      // client.HGET('members', user_id, function (err, member_id) {
+      //   userdb.query('select id from member where id =' 0 member_id, function (err, result) {
+
+      //   });
+      // });
+    });
+  });
+};
 

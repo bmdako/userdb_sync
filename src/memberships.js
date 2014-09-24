@@ -58,6 +58,7 @@ module.exports.readOptOutsIntoRedis = function (callback) {
 
 module.exports.convertSignups = function (callback) {
   client.RPOP('tbl_signup_nyhedsbrev', function (err, data) {
+
     if (data === null)
       return callback();
 
@@ -134,8 +135,9 @@ module.exports.convertSignups = function (callback) {
 //                 19 |  269560 |           108 |           1 | Jeg modtager for mange mails generelt                                                                                                                                      | 2012-03-16 10:08:51.443173
 //                 20 | 2010998 |           108 |           1 | Jeg er blevet tilmeldt ved en fejl                         
 
-module.exports.convertSignouts = function (callback) { //tbl_signup_nyhedsbrev, member_id, is_permission, membership_id
+module.exports.convertSignouts = function (callback) {
   client.RPOP('tbl_user_afmelding', function (err, data) {
+
     if (data === null)
       return callback();
 
@@ -189,6 +191,7 @@ module.exports.convertSignouts = function (callback) { //tbl_signup_nyhedsbrev, 
   });
 
   function updateMembership(err, result) {
+
     var x_member = {
       id: this.membership_id,
       signout_dato: this.tbl_signup_nyhedsbrev.signout_dato,
@@ -262,8 +265,9 @@ module.exports.convertSignouts = function (callback) { //tbl_signup_nyhedsbrev, 
 // (13 rows)
 
 // TODO: test
-module.exports.convertOptOuts = function (callback) { // (tbl_bruger, member_id, email_id) {
+module.exports.convertOptOuts = function (callback) {
   client.RPOP('tbl_mail_optout', function (err, data) {
+
     if (data === null)
       return callback();
 

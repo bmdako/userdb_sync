@@ -50,6 +50,11 @@ module.exports.convertReasonTypes = function (callback) {
   // To convert reason types, we're fetching the user_feedbacks that are submittet without the custom 'Andet:'-prefix
   // (Reasons with 'Andet:' are converted into unsub_reason.custom_reason_text and a action_history)
   mdb.query('SELECT user_feedback FROM tbl_user_afmelding WHERE user_feedback NOT LIKE \'Andet:%\' GROUP BY user_feedback', function (err, result) {
+
+    if (result.rowCount === 0)
+      if (callback !== undefined && typeof callback === 'function')
+        return callback();
+
     var count = result.rowCount,
         done = 0;
 
@@ -100,6 +105,11 @@ function insertReasonType (text, callback) {
 
 module.exports.convertInterests = function (callback) {
   mdb.select_all_from('tbl_interesser', function (err, result) {
+
+    if (result.rowCount === 0)
+      if (callback !== undefined && typeof callback === 'function')
+        return callback();
+
     var count = result.rowCount,
         done = 0;
 
@@ -135,6 +145,11 @@ module.exports.convertInterests = function (callback) {
 
 module.exports.convertInterestParents = function (callback) {
   mdb.select_all_from('tbl_interesse_parent', function (err, result) {
+    
+    if (result.rowCount === 0)
+      if (callback !== undefined && typeof callback === 'function')
+        return callback();
+
     var count = result.rowCount,
         done = 0;
 

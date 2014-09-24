@@ -14,14 +14,16 @@ var mdb = require('./mdb_client'),
 
 
 module.exports.readSignupsIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_signup_nyhedsbrev', 'signups', callback);
+  redis_helper.createListCopyFromMdb('tbl_signup_nyhedsbrev', 'tbl_signup_nyhedsbrev', callback);
 };
-
 
 module.exports.readSignoutsIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_user_afmelding', 'signouts', callback);
+  redis_helper.createListCopyFromMdb('tbl_user_afmelding', 'tbl_user_afmelding', callback);
 };
 
+module.exports.readOptOutsIntoRedis = function (callback) {
+  redis_helper.createListCopyFromMdb('tbl_mail_optout', 'tbl_mail_optout', callback);
+};
 
 
 // mysql> show columns from subscription_member;
@@ -55,12 +57,11 @@ module.exports.readSignoutsIntoRedis = function (callback) {
 // +-----------------+---------------------+------+-----+---------+----------------+
 
 module.exports.convertSignups = function (callback) {
-  client.RPOP('signups', function (err, signup) {
+  client.RPOP('tbl_signup_nyhedsbrev', function (err, data) {
+    if (data === null)
+      return callback();
 
-    if (signup === null)
-      callback();
-
-    var tbl_signup_nyhedsbrev = JSON.parse(signup);
+    var tbl_signup_nyhedsbrev = JSON.parse(data);
 
     client.HGET('locations', tbl_signup_nyhedsbrev.location_id, function (err, location_id) {
       client.HGET('members', tbl_signup_nyhedsbrev.user_id, function (err, member_id) {
@@ -134,12 +135,11 @@ module.exports.convertSignups = function (callback) {
 //                 20 | 2010998 |           108 |           1 | Jeg er blevet tilmeldt ved en fejl                         
 
 module.exports.convertSignouts = function (callback) { //tbl_signup_nyhedsbrev, member_id, is_permission, membership_id
-  client.RPOP('signouts', function (err, signout) {
+  client.RPOP('tbl_user_afmelding', function (err, data) {
+    if (data === null)
+      return callback();
 
-    if (signout === null)
-      callback();
-
-    var tbl_user_afmelding = JSON.parse(signout);
+    var tbl_user_afmelding = JSON.parse(data);
 
     client.HGET('members', tbl_user_afmelding.user_id, function (err, member_id) {
       client.HEXISTS('subscriptions', tbl_user_afmelding.nyhedsbrev_id, function (err, exists) {
@@ -209,9 +209,6 @@ module.exports.convertSignouts = function (callback) { //tbl_signup_nyhedsbrev, 
 
 
 
-module.exports.readOptOutsIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_mail_optout', 'optouts', callback);
-};
 
 // mysql> show columns from opt_out_desc;
 // +-------------+------------------+------+-----+---------+----------------+
@@ -266,12 +263,11 @@ module.exports.readOptOutsIntoRedis = function (callback) {
 
 // TODO: test
 module.exports.convertOptOuts = function (callback) { // (tbl_bruger, member_id, email_id) {
-  client.RPOP('optouts', function (err, optout) {
+  client.RPOP('tbl_mail_optout', function (err, data) {
+    if (data === null)
+      return callback();
 
-    if (optout === null)
-      callback();
-
-    var tbl_mail_optout = JSON.parse(optout);
+    var tbl_mail_optout = JSON.parse(data);
 
 
     //mdb.query('SELECT mail_optout_id, insert_ts FROM tbl_mail_optout WHERE email =\'' + tbl_bruger.email + '\'', function (err, result) {

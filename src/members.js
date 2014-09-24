@@ -37,15 +37,15 @@ workerEmitter.on('ready', findUser);
 
 
 module.exports.readBrugereIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_bruger', 'brugere', callback);
+  redis_helper.createListCopyFromMdb('tbl_bruger', 'tbl_bruger', callback);
 };
 
 module.exports.readInteresseLinierIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_interesse_linie', 'interest_lines', callback);
+  redis_helper.createListCopyFromMdb('tbl_interesse_linie', 'tbl_interesse_linie', callback);
 };
 
 module.exports.readUserActionsIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_user_action', 'user_actions', callback);
+  redis_helper.createListCopyFromMdb('tbl_user_action', 'tbl_user_action', callback);
 };
 
 module.exports.mapMembersIntoRedis = function (callback) {
@@ -74,11 +74,9 @@ function findUser () {
     process.exit(0);
   }
 
-  client.RPOP('brugere', function (err, task) {
-  //client.RPOPLPUSH('brugere', 'brugere_done', function (err, task) {
+  client.RPOP('tbl_bruger', function (err, task) {
     if (err) throw err;
 
-    // List is empty
     if (task === null)
       workerEmitter.emit('empty');
     else
@@ -103,6 +101,30 @@ function countUsers () {
 }
 
 
+// mysql> show columns from member;
+// +---------------+---------------------------+------+-----+-------------------+----------------+
+// | Field         | Type                      | Null | Key | Default           | Extra          |
+// +---------------+---------------------------+------+-----+-------------------+----------------+
+// | id            | int(11) unsigned          | NO   | PRI | NULL              | auto_increment |
+// | firstname     | varchar(255)              | YES  |     |                   |                |
+// | lastname      | varchar(255)              | YES  |     |                   |                |
+// | coname        | varchar(255)              | YES  |     |                   |                |
+// | birth_year    | year(4)                   | YES  |     | NULL              |                |
+// | birth_date    | date                      | YES  |     | NULL              |                |
+// | gender        | char(1)                   | YES  |     |                   |                |
+// | username      | varchar(255)              | YES  |     |                   |                |
+// | password      | varchar(255)              | YES  |     |                   |                |
+// | status        | enum('inactive','active') | NO   |     | inactive          |                |
+// | company       | varchar(255)              | YES  |     |                   |                |
+// | company_cvr   | varchar(255)              | YES  |     |                   |                |
+// | is_internal   | tinyint(1)                | NO   |     | 0                 |                |
+// | robinson_flag | tinyint(1) unsigned       | NO   |     | 0                 |                |
+// | created_at    | timestamp                 | YES  |     | CURRENT_TIMESTAMP |                |
+// | activated_at  | datetime                  | YES  |     | NULL              |                |
+// | updated_at    | datetime                  | YES  |     | NULL              |                |
+// | mdb_user_id   | int(11)                   | YES  |     | NULL              |                |
+// | external_id   | varchar(255)              | YES  |     | NULL              |                |
+// +---------------+---------------------------+------+-----+-------------------+----------------+
 
 function convertMember (bruger, callback) {
   var tbl_bruger = JSON.parse(bruger);
@@ -130,6 +152,7 @@ function convertMember (bruger, callback) {
       }
 
       userdb.insert('member', member, function (err, result) {
+        if (err) throw err;
 
         client.HSET('members', tbl_bruger.user_id, result.insertId);
 
@@ -311,18 +334,20 @@ function convertForeignKey (tbl_bruger, member_id) {
 
 // TODO: test
 module.exports.convertInteresseLinier = function (callback) {
-  client.RPOP('interest_lines', function (err, interest_line) {
-    if (interest_line === null)
-      callback();
+  client.RPOP('tbl_interesse_linie', function (err, data) {
+    if (data === null)
+      return callback();
 
     // tbl_interesse_linie.interesse_linie_id
-    var tbl_interesse_linie = JSON.parse(interest_line);
+    var tbl_interesse_linie = JSON.parse(data);
 
     client.HGET('members', tbl_interesse_linie.user_id, function (err, member_id) {
       if (member_id !== null) {
 
         client.HGET('interests', tbl_interesse_linie.interesse_id, function (err, interest_id) {
           client.HGET('locations', tbl_interesse_linie.location_id, function (err, location_id) {
+
+            //userdb.query('SELECT id FROM interest_line')
 
             var interest_line = {
               member_id: parseInt(member_id),
@@ -356,11 +381,11 @@ module.exports.convertInteresseLinier = function (callback) {
 // +----------------+---------------------+------+-----+---------+----------------+
 
 module.exports.convertUserActions = function (callback) {
-  client.RPOP('user_actions', function (err, user_action) {
-    if (user_action === null)
-      callback();
+  client.RPOP('tbl_user_action', function (err, data) {
+    if (data === null)
+      return callback();
 
-    var tbl_user_action = JSON.parse(user_action);
+    var tbl_user_action = JSON.parse(data);
 
     var user_action_type_name = get_user_action_type_name(tbl_user_action.user_action_type_id);
     

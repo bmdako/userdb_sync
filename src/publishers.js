@@ -39,6 +39,11 @@ module.exports.mapSubscriptionIntoRedis = function (callback) {
 
 module.exports.convertPublishers = function (callback) {
   mdb.select_all_from('tbl_publisher', function (err, result) {
+    
+    if (result.rowCount === 0)
+      if (callback !== undefined && typeof callback === 'function')
+        return callback();
+
     var count = result.rowCount,
         done = 0;
 
@@ -97,6 +102,11 @@ module.exports.convertPublishers = function (callback) {
 
 module.exports.convertSubscriptions = function (callback) {
   mdb.select_all_from('tbl_nyhedsbrev WHERE permission = 0', function (err, result) {
+
+    if (result.rowCount === 0)
+      if (callback !== undefined && typeof callback === 'function')
+        return callback();
+
     var count = result.rowCount,
         done = 0;
     

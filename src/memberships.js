@@ -25,6 +25,10 @@ module.exports.readOptOutsIntoRedis = function (callback) {
   redis_helper.createListCopyFromMdb('tbl_mail_optout', 'tbl_mail_optout', callback);
 };
 
+module.exports.mapEmailsIntoRedis = function (callback) {
+  redis_helper.createHashMappingFromUserdb('SELECT member_id, id FROM email', 'emails', callback);
+};
+
 
 // mysql> show columns from subscription_member;
 // +-----------------+---------------------+------+-----+---------+----------------+
@@ -57,49 +61,83 @@ module.exports.readOptOutsIntoRedis = function (callback) {
 // +-----------------+---------------------+------+-----+---------+----------------+
 
 module.exports.convertSignups = function (callback) {
-  client.RPOP('tbl_signup_nyhedsbrev', function (err, data) {
+  var done = 0;
+  work();
 
-    if (data === null)
-      return callback();
+  function work () {
+    client.RPOP('tbl_signup_nyhedsbrev', function (err, data) {
 
-    var tbl_signup_nyhedsbrev = JSON.parse(data);
+      if (data === null)
+        return callback();
 
-    client.HGET('locations', tbl_signup_nyhedsbrev.location_id, function (err, location_id) {
+      var tbl_signup_nyhedsbrev = JSON.parse(data);
+
       client.HGET('members', tbl_signup_nyhedsbrev.user_id, function (err, member_id) {
-        client.HGET('emails', member_id, function (err, email_id) {
-          var x_member = {
-            member_id: member_id,
-            email_id: email_id,
-            location_id: location_id,
-            active: parseInt(tbl_signup_nyhedsbrev.signup_flag), //signup_flag '1' eller '0'
-            joined: tbl_signup_nyhedsbrev.signup_dato
-            // ,
-            // unjoined: tbl_signup_nyhedsbrev.signout_dato,
-            // unsub_reason_id: 'TODO'
-          };
+        if (member_id !== null) {
 
-          client.HEXISTS('subscriptions', tbl_signup_nyhedsbrev.nyhedsbrev_id, function (err, reply) {
-            var is_subscription = reply === 1,
-                hash = is_subscription ? 'subscriptions' : 'permissions';
+          client.HGET('emails', member_id, function (err, email_id) {
+            client.HGET('locations', tbl_signup_nyhedsbrev.location_id, function (err, location_id) {
 
-            client.HGET(hash, tbl_signup_nyhedsbrev.nyhedsbrev_id, function (err, result) {
-              if (is_subscription) {
-                x_member.subscription_id = result;
-                userdb.insert('subscription_member', x_member, function (err, result) {
-                  //workerEmitter.emit('convertSignups_done', tbl_signup_nyhedsbrev, member_id, false, result.insertId);
+              var membership = {
+                member_id: parseInt(member_id),
+                email_id: parseInt(email_id),
+                location_id: parseInt(location_id),
+                active: parseInt(tbl_signup_nyhedsbrev.signup_flag), //signup_flag '1' eller '0'
+                joined: tbl_signup_nyhedsbrev.signup_dato,
+                unjoined: tbl_signup_nyhedsbrev.signout_dato
+                // unsub_reason_id: 'TODO'
+              };
+
+              client.HEXISTS('subscriptions', tbl_signup_nyhedsbrev.nyhedsbrev_id, function (err, reply) {
+                var is_subscription = reply === 1,
+                    hash = is_subscription ? 'subscriptions' : 'permissions';
+                
+                client.HGET(hash, tbl_signup_nyhedsbrev.nyhedsbrev_id, function (err, result) {
+                  if (is_subscription) {
+                    var subscription_id = parseInt(result);
+
+                    selectConvertedSubscriptionMember(member_id, email_id, function (err, result) {
+
+                      if (result.length === 0) {
+                        membership.subscription_id = subscription_id;
+                        userdb.insert('subscription_member', membership);
+                      }
+
+                      work();
+                      return;
+                    });
+
+                  } else {
+                    var permission_id = parseInt(result);
+
+                    selectConvertedPermissionMember(member_id, email_id, function (err, result) {
+
+                      if (result.length === 0) {
+                        membership.permission_id = permission_id;
+                        userdb.insert('permission_member', membership);
+                      }
+
+                      work();
+                      return;
+                    });
+                  }
                 });
-              } else {
-                x_member.permission_id = result;
-                userdb.insert('permission_member', x_member, function (err, result) {
-                  //workerEmitter.emit('convertSignups_done', tbl_signup_nyhedsbrev, member_id, true, result.insertId);
-                });
-              }
+              });
             });
           });
-        });
+        } else {
+          work();
+          return;
+        }
       });
     });
-  });
+
+    if (++done % 1000 === 0) {
+      client.LLEN('tbl_signup_nyhedsbrev', function (err, data) {
+        console.log('Items to go from tbl_signup_nyhedsbrev:', data, new Date().toString());
+      });
+    }
+  }
 }
 
 
@@ -113,6 +151,7 @@ module.exports.convertSignups = function (callback) {
 // | custom_reason_text | text             | NO   |     | NULL    |                |
 // +--------------------+------------------+------+-----+---------+----------------+
 
+// tbl_user_afmelding: ===
 //  user_afmelding_id | user_id | nyhedsbrev_id | location_id |                                                                               user_feedback                                                                                |          oprettet          
 // -------------------+---------+---------------+-------------+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------+----------------------------
 //              49851 | 2475353 |           108 |           1 | Indholdet i jeres mails er ikke relevant for mig                                                                                                                           | 2013-08-04 20:39:07.68253
@@ -136,78 +175,155 @@ module.exports.convertSignups = function (callback) {
 //                 20 | 2010998 |           108 |           1 | Jeg er blevet tilmeldt ved en fejl                         
 
 module.exports.convertSignouts = function (callback) {
-  client.RPOP('tbl_user_afmelding', function (err, data) {
+  var done = 0;
+  work();
 
-    if (data === null)
-      return callback();
+  function work () {
+    client.RPOP('tbl_user_afmelding', function (err, data) {
 
-    var tbl_user_afmelding = JSON.parse(data);
+      if (data === null)
+        return callback();
 
-    client.HGET('members', tbl_user_afmelding.user_id, function (err, member_id) {
-      client.HEXISTS('subscriptions', tbl_user_afmelding.nyhedsbrev_id, function (err, exists) {
-        client.HGET('subscriptions', tbl_user_afmelding.nyhedsbrev_id, function (err, subscription_id) {
-          client.HGET('permissions', tbl_user_afmelding.nyhedsbrev_id, function (err, permission_id) {
+      var tbl_user_afmelding = JSON.parse(data);
 
-            // TODO XXX
-            // determin if it is a permission or subscription
-            // SELECT id from subscription_member WHERE member_id = member_id AND subscription_id = subscription_id
-            // SELECT id from permission_member WHERE member_id = member_id AND subscription_id = subscription_id
-            // UPDATE subscription_member
-            //     unjoined: tbl_signup_nyhedsbrev.signout_dato,
-            //     unsub_reason_id: 'TODO'
+      // Getting the new (converted) member id from redis
+      client.HGET('members', tbl_user_afmelding.user_id, function (err, member_id) {
+        // If the member is not converted, we don't go any further
+        if (member_id !== null) {
 
-            client.HGET('locations', tbl_user_afmelding.location_id, function (err, location_id) {
-            // TODO:
-            // TODO: tbl_user_afmelding
-            // => action_history - Brug info-kolonnen.
-
-              // var action_history = {
-              //   member_id: member_id,
-              //   action_type_id: id,
-              //   description: user_action_type_name + '(' + user_action_type.user_action_id + ')',
-              //   created_at: user_action_type.oprettet,
-              //   info: 'TODO'
-              // }
-
-              // userdb.insert('action_history', action_history, errHandler);
-
-              var unsub_reason = {};
-
-              unsub_reason.custom_reason_text = tbl_user_afmelding.user_feedback.indexOf('Andet:') === 0 ?
-                 tbl_user_afmelding.user_feedback.substring(7) : null;
-
-              var reason = tbl_user_afmelding.user_feedback.indexOf('Andet:') === 0 ?
-                'Andet' : tbl_user_afmelding.user_feedback;
+          // Finding the members email id - at the time of conversion, each member has max one email
+          client.HGET('emails', member_id, function (err, email_id) {
+            // Finding the converted location id from redis
+            //client.HGET('locations', tbl_user_afmelding.location_id, function (err, location_id) {
+              // Testing if the signout is a newsletter or a permission by checking if the id exists
+              client.HEXISTS('subscriptions', tbl_user_afmelding.nyhedsbrev_id, function (err, exists) {
                 
-              client.HGET('reason_types', reason, function (err, reason_type_id) {
-                unsub_reason.reason_type_id = reason_type_id;
-                userdb.insert('unsub_reason', unsub_reason, updateMembership);
+                // The signout is for a subscription, so we need to update the corresponding subscription member
+                if (exists === 1) {
+                  // Finding the converted subscription id from redis
+                  client.HGET('subscriptions', tbl_user_afmelding.nyhedsbrev_id, function (err, subscription_id) {
+                
+                    // Finding the converted signup that is related to this signout
+                    selectConvertedSubscriptionMember(member_id, email_id, function (err, result) {
+                      // Only if the signup has been converted, we convert the signout
+                      if (result.length === 1) {
+                        var subscription_member = result[0];
+
+                        // Inserting the reason for unsubscribing and updating the subscription membership in the callback
+                        insertUnsubReason(tbl_user_afmelding, function (err, result) {
+                          updateConvertedSubscriptionMember(subscription_member.id, result.insertId);
+                        });
+
+                        work();
+                        return;
+                      }
+                    });
+                  });
+
+                // The signout is for a permission, so we need to update the corresponding permission member
+                } else {
+                  // Finding the converted permission id from redis
+                  client.HGET('permissions', tbl_user_afmelding.nyhedsbrev_id, function (err, permission_id) {
+                    
+                    // Finding the converted permission signup that is related to this signout
+                    selectConvertedPermissionMember(member_id, email_id, function (err, result) {
+                      if (result.length === 1) {
+                        var permission_member = result[0];
+
+                        // Inserting the reason for unsubscribing and updating the permission membership in the callback
+                        insertUnsubReason(tbl_user_afmelding, function (err, result) {
+                          updateConvertedPermissionMember(permission_member.id, result.insertId);
+                        });
+
+                        work();
+                        return;
+                      }
+                    })
+                  });
+                }
+
+                // TODO:
+                // => action_history - Brug info-kolonnen.
+
+                // var action_history = {
+                //   member_id: member_id,
+                //   action_type_id: id,
+                //   description: user_action_type_name + '(' + user_action_type.user_action_id + ')',
+                //   created_at: user_action_type.oprettet,
+                //   info: 'TODO'
+                // }
+
+                // userdb.insert('action_history', action_history, errHandler);
+
+ 
               });
-            });
+            //});
           });
-        });
+        } else {
+          work();
+        }
       });
     });
-  });
 
-  function updateMembership(err, result) {
-
-    var x_member = {
-      id: this.membership_id,
-      signout_dato: this.tbl_signup_nyhedsbrev.signout_dato,
-      unsub_reason_id: result.insertId
-    }
-
-    console.log('x_member', x_member);
-
-    if (is_permission) {
-      userdb.update('permission_member', x_member, function (err, result) {
-      });
-    } else {
-      userdb.update('subscription_member', x_member, function (err, result) {
+    if (++done % 1000 === 0) {
+      client.LLEN('tbl_user_afmelding', function (err, data) {
+        console.log('Items to go from tbl_user_afmelding:', data, new Date().toString());
       });
     }
   }
+}
+
+
+function insertUnsubReason (tbl_user_afmelding, callback) {
+  var unsub_reason = {};
+
+  unsub_reason.custom_reason_text = tbl_user_afmelding.user_feedback.indexOf('Andet:') === 0 ?
+     tbl_user_afmelding.user_feedback.substring(7) : null;
+
+  var reason = tbl_user_afmelding.user_feedback.indexOf('Andet:') === 0 ?
+    'Andet' : tbl_user_afmelding.user_feedback;
+    
+  client.HGET('reason_types', reason, function (err, reason_type_id) {
+    unsub_reason.reason_type_id = reason_type_id;
+    userdb.insert('unsub_reason', unsub_reason, callback);
+  });
+}
+
+function updateConvertedSubscriptionMember (membership_id, unsub_reason_id) {
+  updateConvertedMembership('subscription_member', membership_id, unsub_reason_id);
+}
+
+function updateConvertedPermissionMember (membership_id, unsub_reason_id) {
+  updateConvertedMembership('permission_member', membership_id, unsub_reason_id);
+}
+
+function updateConvertedMembership(membershipTable, membership_id, unsub_reason_id) {
+  var membership = {
+    id: membership_id,
+    unsub_reason_id: unsub_reason_id
+  }
+
+  userdb.update(membershipTable, membership);
+}
+
+function selectConvertedSubscriptionMember (member_id, email_id, callback) {
+selectConvertedMembership('subscription_member', member_id, email_id, callback);
+}
+
+function selectConvertedPermissionMember (member_id, email_id, callback) {
+  selectConvertedMembership('permission_member', member_id, email_id, callback);
+}
+
+function selectConvertedMembership (tableName, member_id, email_id, callback) {
+  userdb.query('SELECT id FROM ' + tableName +
+    ' WHERE member_id = ' + member_id +
+    ' AND email_id = ' + email_id,
+    //' AND location_id = ' + location_id,
+    function (err, result) {
+      if (err) throw err;
+
+    callback(err, result);
+  });
 }
 
 

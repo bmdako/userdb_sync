@@ -332,8 +332,8 @@ function convertForeignKey (tbl_bruger, member_id) {
 // | updated_at  | datetime            | YES  |     | NULL              |                |
 // +-------------+---------------------+------+-----+-------------------+----------------+
 
-// TODO: test
 module.exports.convertInteresseLinier = function (callback) {
+  var done = 0;
   work();
 
   function work () {
@@ -363,9 +363,9 @@ module.exports.convertInteresseLinier = function (callback) {
               // instead of doing the userdb.query below, to see if
 
               userdb.query('SELECT id FROM interest_line' +
-                ' WHERE member_id= ' + interest_line.member_id +
-                ' AND interest_id = ' + interest_line.interest_id +
-                ' AND location_id = ' + interest_line.location_id, function (err, result) {
+                ' WHERE member_id = ' + member_id +
+                ' AND interest_id = ' + interest_id +
+                ' AND location_id = ' + location_id, function (err, result) {
                   if (err) throw err;
 
                   if (result.length === 0) {
@@ -384,6 +384,12 @@ module.exports.convertInteresseLinier = function (callback) {
         }
       });
     });
+
+    if (++done % 1000 === 0) {
+      client.LLEN('tbl_interesse_linie', function (err, data) {
+        console.log('Items to go from tbl_interesse_linie:', data, new Date().toString());
+      });
+    }
   }
 };
 
@@ -403,6 +409,7 @@ module.exports.convertInteresseLinier = function (callback) {
 // +----------------+---------------------+------+-----+---------+----------------+
 
 module.exports.convertUserActions = function (callback) {
+  var done = 0;
   work();
 
   function work () {
@@ -456,6 +463,12 @@ module.exports.convertUserActions = function (callback) {
         }
       });
     });
+
+    if (++done % 1000 === 0) {
+      client.LLEN('tbl_user_action', function (err, data) {
+        console.log('Items to go from tbl_user_action:', data, new Date().toString());
+      });
+    }
   }
 };
 

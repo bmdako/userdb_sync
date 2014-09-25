@@ -73,7 +73,6 @@ gulp.task('mapPermissionIntoRedis', function (callback) {
 
 
 
-
 // Needs:
 // - mapPublisherIntoRedis
 gulp.task('convertPublishers', function (callback) {
@@ -139,9 +138,17 @@ gulp.task('readInteresseLinierIntoRedis', function (callback) {
 
 // Needs:
 // - mapMembersIntoRedis
+// - mapEmailsIntoRedis
 // - readSignupsIntoRedis
+// - mapLocationsIntoRedis
+// - mapPermissionIntoRedis
+// - mapSubscriptionIntoRedis
 gulp.task('convertSignups', function (callback) {
   memberships.convertSignups(callback);
+});
+
+gulp.task('mapEmailsIntoRedis', function (callback) {
+  memberships.mapEmailsIntoRedis(callback);
 });
 
 gulp.task('readSignupsIntoRedis', function (callback) {
@@ -153,6 +160,10 @@ gulp.task('readSignupsIntoRedis', function (callback) {
 // Needs:
 // - mapMembersIntoRedis
 // - readSignoutsIntoRedis
+// - mapMembersIntoRedis
+// - mapEmailsIntoRedis
+// - mapPermissionIntoRedis
+// - mapSubscriptionIntoRedis
 gulp.task('convertSignouts', function (callback) {
   memberships.convertSignouts(callback);
 });

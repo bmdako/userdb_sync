@@ -1,3 +1,5 @@
+/*jshint node: true */
+
 'use strict';
 
 var mysql = require('mysql');
@@ -15,7 +17,7 @@ var pool = mysql.createPool({
 // Testing we can connect to database
 pool.getConnection(function(err, connection) {
   if (err) {
-    console.log('Connection to MySQL failed: ', err)
+    console.log('Connection to MySQL failed: ', err);
     process.exit(1);
   } else {
     connection.release();
@@ -41,13 +43,13 @@ function updateSqlString (tableName, data) {
       pairs.push(column + '=' + pool.escape(data[column]));
   }
 
-  return 'UPDATE ' + tableName + ' SET ' + pairs.join(',') + ' WHERE id = ' + data['id'];
+  return 'UPDATE ' + tableName + ' SET ' + pairs.join(',') + ' WHERE id = ' + data.id;
 }
 
 
 module.exports.query = function (query, callback) {
   pool.query(query, callback);
-}
+};
 
 
 module.exports.insert = function (tableName, data, callback) {
@@ -67,33 +69,33 @@ module.exports.insert = function (tableName, data, callback) {
     else if (callback !== undefined && typeof callback === 'function')
      callback(err, result);
   });
-}
+};
 
 
 module.exports.update = function (tableName, data, callback) {
 
-  if (data['id'] === undefined) {
+  if (data.id === undefined) {
     callback('Field id missing.');
   }
 
   var sql = updateSqlString(tableName, data);
   console.log('test update', sql);
   //pool.query(sql, callback);
-}
+};
 
 
 module.exports.select_all_from = function (tableName, callback) {
   var sql = 'SELECT * FROM ' + tableName;
   pool.query(sql, callback);
-}
+};
 
 
 module.exports.select_id_from = function (tableName, callback) {
   var sql = 'SELECT id FROM ' + tableName;
   pool.query(sql, callback);
-}
+};
 
 module.exports.select_member_email = function (member_id, callback) {
   var sql = 'SELECT member.id, email.email_address FROM member LEFT JOIN email on member.id = email.member_id WHERE member.id=' + member_id;
   pool.query(sql, callback);
-}
+};

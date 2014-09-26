@@ -1,3 +1,5 @@
+/*jshint node: true */
+
 'use strict';
 
 var mdb = require('./mdb_client'),
@@ -169,7 +171,7 @@ module.exports.convertInterestParents = function (callback) {
           callback();
     });
   });
-}
+};
 
 
 
@@ -191,10 +193,10 @@ module.exports.convertActionTypes = function (callback) {
         if (exists === 0) {
           var action_type = {
             description: tbl_user_action_type.user_action_type_name
-          }
+          };
 
           userdb.insert('action_type', action_type, function (err, result) {
-            client.HSET('action_types', tbl_user_action_type.user_action_type_name, result.insertId)
+            client.HSET('action_types', tbl_user_action_type.user_action_type_name, result.insertId);
           });
         }
       });
@@ -232,7 +234,7 @@ module.exports.convertLocations = function (callback) {
             description: tbl_location.location_tekst,
             active: 1,
             mdb_location_id: tbl_location.location_id
-          }
+          };
 
           userdb.insert('location', location, function (err, result) {
             client.HSET('locations', tbl_location.location_id, result.insertId);
@@ -277,7 +279,7 @@ module.exports.convertPermissions = function (callback) {
             display_text: tbl_nyhedsbrev.nyhedsbrev_navn,
             description: tbl_nyhedsbrev.indhold,
             mdb_nyhedsbrev_id: tbl_nyhedsbrev.nyhedsbrev_id
-          }
+          };
 
           userdb.insert('permission', permission, function (err, result) {
             client.HSET('permissions', tbl_nyhedsbrev.nyhedsbrev_id, result.insertId);
@@ -290,6 +292,6 @@ module.exports.convertPermissions = function (callback) {
         if (callback !== undefined && typeof callback === 'function')
           callback();
     });
-  })
+  });
 };
 

@@ -1,3 +1,5 @@
+/*jshint node: true */
+
 'use strict';
 
 var mdb = require('./mdb_client'),
@@ -70,7 +72,7 @@ module.exports.convertPublishers = function (callback) {
             active: tbl_publisher.enabled,
             url: tbl_publisher.publisher_url,
             mdb_publisher_id: tbl_publisher.publisher_id
-          }
+          };
 
           userdb.insert('publisher', publisher, function (err, result) {
             client.HSET('publishers', tbl_publisher.publisher_id, result.insertId);
@@ -129,7 +131,7 @@ module.exports.convertSubscriptions = function (callback) {
             display_text: tbl_nyhedsbrev.nyhedsbrev_navn,
             description: tbl_nyhedsbrev.indhold,
             mdb_nyhedsbrev_id: tbl_nyhedsbrev.nyhedsbrev_id
-          }
+          };
 
           // if (tbl_nyhedsbrev.publisher_id === null) {
 
@@ -192,7 +194,7 @@ function findBerlingskeMediaPublisher (callback) {
       // berlingske_media_publisher_id = result[0].id;
       // workerEmitter.emit('publisher_ready');
     } else {
-      throw new Error('Publisher Berlingske Media not yet converted.')
+      throw new Error('Publisher Berlingske Media not yet converted.');
     }
   });
 }

@@ -1,3 +1,5 @@
+/*jshint node: true */
+
 'use strict';
 
 var mdb = require('./mdb_client'),
@@ -76,7 +78,10 @@ module.exports.convertSignups = function (callback) {
         if (member_id !== null) {
 
           client.HGET('emails', member_id, function (err, email_id) {
+            if (email_id === null) return work();
+
             client.HGET('locations', tbl_signup_nyhedsbrev.location_id, function (err, location_id) {
+              if (location_id === null) return work();
 
               var membership = {
                 member_id: parseInt(member_id),
@@ -138,7 +143,7 @@ module.exports.convertSignups = function (callback) {
       });
     }
   }
-}
+};
 
 
 
@@ -193,6 +198,8 @@ module.exports.convertSignouts = function (callback) {
 
           // Finding the members email id - at the time of conversion, each member has max one email
           client.HGET('emails', member_id, function (err, email_id) {
+            if (email_id === null) return work();
+
             // Finding the converted location id from redis
             //client.HGET('locations', tbl_user_afmelding.location_id, function (err, location_id) {
               // Testing if the signout is a newsletter or a permission by checking if the id exists
@@ -238,7 +245,7 @@ module.exports.convertSignouts = function (callback) {
                         work();
                         return;
                       }
-                    })
+                    });
                   });
                 }
 
@@ -271,7 +278,7 @@ module.exports.convertSignouts = function (callback) {
       });
     }
   }
-}
+};
 
 
 function insertUnsubReason (tbl_user_afmelding, callback) {
@@ -301,17 +308,19 @@ function updateConvertedMembership(membershipTable, membership_id, unsub_reason_
   var membership = {
     id: membership_id,
     unsub_reason_id: unsub_reason_id
-  }
+  };
 
   userdb.update(membershipTable, membership);
 }
 
 function selectConvertedSubscriptionMember (member_id, email_id, callback) {
-selectConvertedMembership('subscription_member', member_id, email_id, callback);
+  //selectConvertedMembership('subscription_member', member_id, email_id, callback);
+  callback(null, []);
 }
 
 function selectConvertedPermissionMember (member_id, email_id, callback) {
-  selectConvertedMembership('permission_member', member_id, email_id, callback);
+  //selectConvertedMembership('permission_member', member_id, email_id, callback);
+  callback(null, []);
 }
 
 function selectConvertedMembership (tableName, member_id, email_id, callback) {
@@ -398,7 +407,7 @@ module.exports.convertOptOuts = function (callback) {
       var opt_outs = {
         email_id: email_id,
         timestamp: tbl_mail_optout.insert_ts
-      }
+      };
 
       userdb.insert('opt_outs', opt_outs);
     });

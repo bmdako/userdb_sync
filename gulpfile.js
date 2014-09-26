@@ -1,4 +1,5 @@
 var gulp = require('gulp'),
+    jshint = require('gulp-jshint'),
     members = require('./src/members'),
     memberships = require('./src/memberships'),
     publishers = require('./src/publishers'),
@@ -11,7 +12,11 @@ gulp.task('default', [
   // place code for your default task here
 });
 
-
+gulp.task('lint', function() {
+  gulp.src('./src/**/*.js')
+    .pipe(jshint())
+    .pipe(jshint.reporter('default'));
+});
 
 // Needs:
 // - mapLocationsIntoRedis

@@ -1,3 +1,5 @@
+/*jshint node: true */
+
 'use strict';
 
 var mdb = require('./mdb_client'),
@@ -43,7 +45,7 @@ module.exports.createListCopyFromMdb = function (tableName, listName, callback) 
       offset = offset + limit;
     });
   }  
-}
+};
 
 
 module.exports.createHashMappingFromUserdb = function (sql, hashName, callback) {
@@ -78,8 +80,8 @@ module.exports.createHashMappingFromUserdb = function (sql, hashName, callback) 
     });
 
   });
-}
+};
 
 module.exports.test = function () {
   client.DEL('test', 'test_done', console.log);
-}
+};

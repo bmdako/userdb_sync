@@ -1,3 +1,5 @@
+/*jshint node: true */
+
 'use strict';
 
 var mdb = require('./mdb_client'),
@@ -65,12 +67,12 @@ module.exports.convertMembers = function (callback) {
 
   // Starting the whole thing!
   workerEmitter.emit('get_ready');
-}
+};
 
 
 function findUser () {
   if (exiting) {
-    console.log('Exit clean.')
+    console.log('Exit clean.');
     process.exit(0);
   }
 
@@ -149,7 +151,7 @@ function convertMember (bruger, callback) {
         robinson_flag: tbl_bruger.robinson_flag === true ? '1' : '0',
         activated_at: tbl_bruger.activate_dato,  // 'f' eller 't'
         updated_at: tbl_bruger.opdatering_dato
-      }
+      };
 
       userdb.insert('member', member, function (err, result) {
         if (err) throw err;
@@ -168,7 +170,7 @@ function convertMember (bruger, callback) {
       callback();
     }
   });
-};
+}
 
 
 // mysql> show columns from email;
@@ -233,7 +235,7 @@ function convertMobil (tbl_bruger, member_id) {
       system_id: system_id_mdb_sync,
       number: tbl_bruger.mobil,
       status: 1
-    }
+    };
 
     userdb.insert('phone', mobil);
   }
@@ -357,7 +359,7 @@ module.exports.convertInteresseLinier = function (callback) {
                 location_id: parseInt(location_id),
                 active: 1,
                 created_at: tbl_interesse_linie.oprettet
-              }
+              };
 
               // We could evalute on tbl_interesse_linie.interesse_linie_id
               // instead of doing the userdb.query below, to see if
@@ -433,7 +435,7 @@ module.exports.convertUserActions = function (callback) {
               description: user_action_type_name + '(' + tbl_user_action.user_action_id + ')',
               created_at: tbl_user_action.oprettet,
               info: 'MDB Value: ' + tbl_user_action.value
-            }
+            };
 
             // If the user action is a signoff, we might find user_feedback in tbl_user_afmelding.
             if ([2,4].indexOf(tbl_user_action.user_action_type_id) > -1) {

@@ -132,43 +132,47 @@ function convertMember (bruger, callback) {
   var tbl_bruger = JSON.parse(bruger);
 
   client.HEXISTS('members', tbl_bruger.user_id, function (err, result) {
-    if (result === 0) {
-
-      var member = {
-        mdb_user_id: tbl_bruger.user_id,
-        firstname: tbl_bruger.fornavn,
-        lastname: tbl_bruger.efternavn,
-        coname: tbl_bruger.co_navn,
-        birth_year: tbl_bruger.foedselsaar,
-        birth_date: tbl_bruger.foedselsdato,
-        gender: tbl_bruger.koen,
-        username: tbl_bruger.brugernavn,
-        password: tbl_bruger.adgangskode,
-        status: tbl_bruger.active === true ? 'active' : 'inactive',
-        company: tbl_bruger.firma,
-        company_cvr: null, // TODO
-        is_internal: '0', // TODO: Test på email adresse eller lignede?
-        robinson_flag: tbl_bruger.robinson_flag === true ? '1' : '0',
-        activated_at: tbl_bruger.activate_dato,  // 'f' eller 't'
-        updated_at: tbl_bruger.opdatering_dato
-      };
-
-      userdb.insert('member', member, function (err, result) {
-        if (err) throw err;
-
-        client.HSET('members', tbl_bruger.user_id, result.insertId);
-
-        convertEmail(tbl_bruger, result.insertId);
-        convertTelefon(tbl_bruger, result.insertId);
-        convertMobil(tbl_bruger, result.insertId);
-        convertAddress(tbl_bruger, result.insertId);
-        convertForeignKey(tbl_bruger, result.insertId);
-
-        callback();
-      });
-    } else {
+    if (result === 1) {
       callback();
+      return;
     }
+
+    var member = {
+      mdb_user_id: tbl_bruger.user_id,
+      firstname: tbl_bruger.fornavn,
+      lastname: tbl_bruger.efternavn,
+      coname: tbl_bruger.co_navn,
+      birth_year: tbl_bruger.foedselsaar,
+      birth_date: tbl_bruger.foedselsdato,
+      gender: tbl_bruger.koen,
+      username: tbl_bruger.brugernavn,
+      password: tbl_bruger.adgangskode,
+      status: tbl_bruger.active === true ? 'active' : 'inactive',
+      company: tbl_bruger.firma,
+      company_cvr: null, // TODO
+      is_internal: '0', // TODO: Test på email adresse eller lignede?
+      robinson_flag: tbl_bruger.robinson_flag === true ? '1' : '0',
+      activated_at: tbl_bruger.activate_dato,  // 'f' eller 't'
+      updated_at: tbl_bruger.opdatering_dato
+    };
+
+    userdb.insert('member', member, function (err, result) {
+      var member_id = result.insertId;
+
+      convertEmail(tbl_bruger, member_id, function () {
+        convertTelefon(tbl_bruger, member_id, function () {
+          convertMobil(tbl_bruger, member_id, function () {
+            convertAddress(tbl_bruger, member_id, function () {
+              convertForeignKey(tbl_bruger, member_id, function () {
+                client.HSET('members', tbl_bruger.user_id, member_id, function () {
+                  callback();
+                });
+              });
+            });
+          });
+        });
+      });
+    });
   });
 }
 
@@ -186,7 +190,7 @@ function convertMember (bruger, callback) {
 // | updated_at    | datetime            | YES  |     | NULL              |                |
 // +---------------+---------------------+------+-----+-------------------+----------------+
 
-function convertEmail (tbl_bruger, member_id) {
+function convertEmail (tbl_bruger, member_id, callback) {
   var email = {
     member_id: member_id,
     email_address: tbl_bruger.email,
@@ -194,7 +198,7 @@ function convertEmail (tbl_bruger, member_id) {
     active: 1
   };
 
-  userdb.insert('email', email);
+  userdb.insert('email', email, callback);
 }
 
 
@@ -211,7 +215,7 @@ function convertEmail (tbl_bruger, member_id) {
 // | created_at | timestamp        | YES  |     | CURRENT_TIMESTAMP |                |
 // +------------+------------------+------+-----+-------------------+----------------+
 
-function convertTelefon (tbl_bruger, member_id) {
+function convertTelefon (tbl_bruger, member_id, callback) {
   if (tbl_bruger.telefon !== null && tbl_bruger.telefon !== '') {
 
     var telefon = {
@@ -222,11 +226,11 @@ function convertTelefon (tbl_bruger, member_id) {
       status: 1
     };
 
-    userdb.insert('phone', telefon);
+    userdb.insert('phone', telefon, callback);
   }
 }
 
-function convertMobil (tbl_bruger, member_id) {
+function convertMobil (tbl_bruger, member_id, callback) {
   if (tbl_bruger.mobil !== null && tbl_bruger.mobil !== '') {
 
     var mobil = {
@@ -237,7 +241,7 @@ function convertMobil (tbl_bruger, member_id) {
       status: 1
     };
 
-    userdb.insert('phone', mobil);
+    userdb.insert('phone', mobil, callback);
   }
 }
 
@@ -264,7 +268,7 @@ function convertMobil (tbl_bruger, member_id) {
 // | updated_at    | datetime                   | YES  |     | NULL    |                |
 // +---------------+----------------------------+------+-----+---------+----------------+
 
-function convertAddress (tbl_bruger, member_id) {
+function convertAddress (tbl_bruger, member_id, callback) {
   var postal_number = tbl_bruger.postnummer_dk !== null && tbl_bruger.postnummer_dk !== 0 ? tbl_bruger.postnummer_dk.toString()
     : tbl_bruger.postnummer !== '' ? tbl_bruger.postnummer
     : null;
@@ -294,7 +298,7 @@ function convertAddress (tbl_bruger, member_id) {
       country_code: null
     };
 
-    userdb.insert('address', address);
+    userdb.insert('address', address, callback);
   }
 }
 
@@ -309,14 +313,14 @@ function convertAddress (tbl_bruger, member_id) {
 // | system_key | varchar(255)     | YES  |     |         |                |
 // +------------+------------------+------+-----+---------+----------------+
 
-function convertForeignKey (tbl_bruger, member_id) {
+function convertForeignKey (tbl_bruger, member_id, callback) {
   var foreign_key = {
     system_id: system_id_mdb_sync,
     member_id: member_id,
     system_key: tbl_bruger.ekstern_id
   };
 
-  userdb.insert('foreign_key', foreign_key);
+  userdb.insert('foreign_key', foreign_key, callback);
 }
 
 
@@ -348,42 +352,48 @@ module.exports.convertInteresseLinier = function (callback) {
 
 
       client.HGET('members', tbl_interesse_linie.user_id, function (err, member_id) {
-        if (member_id !== null) {
-
-          client.HGET('interests', tbl_interesse_linie.interesse_id, function (err, interest_id) {
-            client.HGET('locations', tbl_interesse_linie.location_id, function (err, location_id) {
-
-              var interest_line = {
-                member_id: parseInt(member_id),
-                interest_id: parseInt(interest_id),
-                location_id: parseInt(location_id),
-                active: 1,
-                created_at: tbl_interesse_linie.oprettet
-              };
-
-              // We could evalute on tbl_interesse_linie.interesse_linie_id
-              // instead of doing the userdb.query below, to see if
-
-              userdb.query('SELECT id FROM interest_line' +
-                ' WHERE member_id = ' + member_id +
-                ' AND interest_id = ' + interest_id +
-                ' AND location_id = ' + location_id, function (err, result) {
-                  if (err) throw err;
-
-                  if (result.length === 0) {
-                    userdb.insert('interest_line', interest_line);
-                  }
-
-                  work();
-                  return;
-                });
-            });
-          });
-        } else {
-          
+        if (member_id === null) {
           work();
           return;
         }
+
+        client.HGET('locations', tbl_interesse_linie.location_id, function (err, location_id) {
+          if (location_id === null) {
+            work();
+            return;
+          }
+
+          client.HGET('interests', tbl_interesse_linie.interesse_id, function (err, interest_id) {
+
+            var interest_line = {
+              member_id: parseInt(member_id),
+              interest_id: parseInt(interest_id),
+              location_id: parseInt(location_id),
+              active: 1,
+              created_at: tbl_interesse_linie.oprettet
+            };
+
+            // We could evalute on tbl_interesse_linie.interesse_linie_id
+            // instead of doing the userdb.query below, to see if
+
+            // userdb.query('SELECT id FROM interest_line' +
+            //   ' WHERE member_id = ' + member_id +
+            //   ' AND interest_id = ' + interest_id +
+            //   ' AND location_id = ' + location_id, function (err, result) {
+            //     if (err) throw err;
+
+            //     if (result.length === 1) {
+            //       work();
+            //       return;
+            //     } else {
+                  userdb.insert('interest_line', interest_line, function () {
+                    work();
+                    return;
+                  });
+              //   }
+              // });
+          });
+        });
       });
     });
 

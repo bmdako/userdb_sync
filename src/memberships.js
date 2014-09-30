@@ -119,11 +119,12 @@ module.exports.convertSignups = function (callback) {
 
                       if (result.length === 0) {
                         membership.permission_id = permission_id;
-                        userdb.insert('permission_member', membership);
+                        userdb.insert('permission_member', membership, function () {                      
+                          work();
+                          return;
+                        });
                       }
 
-                      work();
-                      return;
                     });
                   }
                 });
@@ -219,10 +220,10 @@ module.exports.convertSignouts = function (callback) {
                         // Inserting the reason for unsubscribing and updating the subscription membership in the callback
                         insertUnsubReason(tbl_user_afmelding, function (err, result) {
                           updateConvertedSubscriptionMember(subscription_member.id, result.insertId);
-                        });
 
-                        work();
-                        return;
+                          work();
+                          return;
+                        });
                       }
                     });
                   });
@@ -240,10 +241,10 @@ module.exports.convertSignouts = function (callback) {
                         // Inserting the reason for unsubscribing and updating the permission membership in the callback
                         insertUnsubReason(tbl_user_afmelding, function (err, result) {
                           updateConvertedPermissionMember(permission_member.id, result.insertId);
+                          
+                          work();
+                          return;
                         });
-
-                        work();
-                        return;
                       }
                     });
                   });

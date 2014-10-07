@@ -4,10 +4,8 @@
 
 var mdb = require('./mdb_client'),
     userdb = require('./userdb_client'),
-    redis_helper = require('./redis_helper'),
     fs = require('fs'),
     eventEmitter = require('events').EventEmitter,
-    fs = require('fs'),
     workerEmitter = new eventEmitter(),
     redis = require("redis"),
     client = redis.createClient();
@@ -27,6 +25,8 @@ var system_id_mdb_sync = 1;
 
 
 
+
+
 workerEmitter.on('get_ready', createOrFindTelefonPhoneType);
 workerEmitter.on('telefon_ready', createOrFindMobilPhoneType);
 workerEmitter.on('mobil_ready', createMdbSyncSystem);
@@ -34,73 +34,89 @@ workerEmitter.on('system_ready', function () {
   workerEmitter.emit('ready');
 });
 
-workerEmitter.on('ready', findUser);
-
-
-
-module.exports.readBrugereIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_bruger', 'tbl_bruger', callback);
-};
-
-module.exports.readInteresseLinierIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_interesse_linie', 'tbl_interesse_linie', callback);
-};
-
-module.exports.readUserActionsIntoRedis = function (callback) {
-  redis_helper.createListCopyFromMdb('tbl_user_action', 'tbl_user_action', callback);
-};
-
-module.exports.mapMembersIntoRedis = function (callback) {
-  redis_helper.createHashMappingFromUserdb('SELECT mdb_user_id, id FROM member', 'members', callback);
-};
-
-
-
-
 
 module.exports.convertMembers = function (callback) {
-  workerEmitter.on('empty', function () {
-    // The callback might be the callback from gulp, so we fire of the callback to let gulp know the task is complete.
-    if (callback !== undefined && typeof callback === 'function')
-      callback();
-  });
+  var convertedMembers = 0,
+      start = Date.now(),
+      splitTime = start;
 
   // Starting the whole thing!
   workerEmitter.emit('get_ready');
+  workerEmitter.on('ready', work);
+
+  function work () {
+    if (exiting) {
+      console.log('Clean exit.');
+      process.exit(0);
+    }
+
+    client.RPOP('tbl_bruger', function (err, bruger) {
+      if (err) throw err;
+
+      if (bruger === null)
+        return callback();
+      else {
+        var tbl_bruger = JSON.parse(bruger);
+        convertMember(tbl_bruger, function () {
+
+          if (++convertedMembers % 1000 === 0) {
+            client.LLEN('tbl_bruger', function (err, data) {
+              var temp = Date.now();
+              console.log('Items to go from tbl_bruger:', data, 'Members converted:', convertedMembers);
+              console.log('Time since start:', (temp - start) / 1000, 'seconds. 1000 in', (temp - splitTime) / 1000, 'seconds.');
+              splitTime = temp;
+            });
+          }
+
+          workerEmitter.emit('ready');
+        });
+      }
+    });
+  }
 };
 
 
-function findUser () {
-  if (exiting) {
-    console.log('Exit clean.');
-    process.exit(0);
+module.exports.convertMissingMembers = function (callback) {
+  var convertedMembers = 0;
+
+  // Starting the whole thing!
+  workerEmitter.emit('get_ready');
+  workerEmitter.on('ready', work);
+
+  function work () {
+    if (exiting) {
+      console.log('Clean exit.');
+      process.exit(0);
+    }
+
+    client.SPOP('smissing_mysql', function (err, user_id) {
+      if (err) throw err;
+
+      if (user_id === null)
+        return callback();
+      else {
+        mdb.query('SELECT * FROM tbl_bruger WHERE user_id = ' + user_id, function (err, result) {
+
+          if (result.rowCount !== 1) {
+            throw new Error('user_id too many ' + user_id + ' ' + result.rowCount);
+          }
+
+          convertMember(result.rows[0], function () {
+
+            if (++convertedMembers % 1000 === 0) {
+              console.log(convertedMembers, 'done /');
+            }
+
+            workerEmitter.emit('ready');
+          });
+        });
+      }
+    });
   }
-
-  client.RPOP('tbl_bruger', function (err, task) {
-    if (err) throw err;
-
-    if (task === null)
-      workerEmitter.emit('empty');
-    else
-      convertMember(task, function() {
-        countUsers();
-        workerEmitter.emit('ready');
-      });
-  });
-}
+};
 
 
-var convertedMembers = 0,
-    start = Date.now(),
-    splitTime = Date.now(),
-    splitter = 100;
-function countUsers () {
-  if (++convertedMembers % splitter === 0) {
-    var temp = Date.now();
-    console.log('Members converted:', convertedMembers, 'in', (temp - start) / 1000, 'seconds. (' + splitter, 'in', (temp - splitTime) / 1000, 'seconds.)');
-    splitTime = temp;
-  }
-}
+
 
 
 // mysql> show columns from member;
@@ -125,12 +141,9 @@ function countUsers () {
 // | activated_at  | datetime                  | YES  |     | NULL              |                |
 // | updated_at    | datetime                  | YES  |     | NULL              |                |
 // | mdb_user_id   | int(11)                   | YES  |     | NULL              |                |
-// | external_id   | varchar(255)              | YES  |     | NULL              |                |
 // +---------------+---------------------------+------+-----+-------------------+----------------+
 
-function convertMember (bruger, callback) {
-  var tbl_bruger = JSON.parse(bruger);
-
+function convertMember (tbl_bruger, callback) {
   client.HEXISTS('members', tbl_bruger.user_id, function (err, result) {
     if (result === 1) {
       callback();
@@ -164,9 +177,7 @@ function convertMember (bruger, callback) {
           convertMobil(tbl_bruger, member_id, function () {
             convertAddress(tbl_bruger, member_id, function () {
               convertForeignKey(tbl_bruger, member_id, function () {
-                client.HSET('members', tbl_bruger.user_id, member_id, function () {
-                  callback();
-                });
+                callback();
               });
             });
           });
@@ -227,6 +238,8 @@ function convertTelefon (tbl_bruger, member_id, callback) {
     };
 
     userdb.insert('phone', telefon, callback);
+  } else {
+    callback();
   }
 }
 
@@ -242,6 +255,8 @@ function convertMobil (tbl_bruger, member_id, callback) {
     };
 
     userdb.insert('phone', mobil, callback);
+  } else {
+    callback();
   }
 }
 
@@ -299,6 +314,8 @@ function convertAddress (tbl_bruger, member_id, callback) {
     };
 
     userdb.insert('address', address, callback);
+  } else {
+    callback();
   }
 }
 
@@ -343,7 +360,13 @@ module.exports.convertInteresseLinier = function (callback) {
   work();
 
   function work () {
+    if (exiting) {
+      console.log('Clean exit.');
+      process.exit(0);
+    }
+
     client.RPOP('tbl_interesse_linie', function (err, data) {
+      if (err) throw err;
       
       if (data === null)
         return callback();
@@ -352,46 +375,53 @@ module.exports.convertInteresseLinier = function (callback) {
 
 
       client.HGET('members', tbl_interesse_linie.user_id, function (err, member_id) {
+        if (err) throw err;
+
         if (member_id === null) {
           work();
           return;
         }
 
         client.HGET('locations', tbl_interesse_linie.location_id, function (err, location_id) {
+          if (err) throw err;
+
           if (location_id === null) {
             work();
             return;
           }
 
           client.HGET('interests', tbl_interesse_linie.interesse_id, function (err, interest_id) {
+            if (err) throw err;
 
-            var interest_line = {
-              member_id: parseInt(member_id),
-              interest_id: parseInt(interest_id),
-              location_id: parseInt(location_id),
-              active: 1,
-              created_at: tbl_interesse_linie.oprettet
-            };
+            if (interest_id === null) {
+              work();
+              return;
+            }
 
-            // We could evalute on tbl_interesse_linie.interesse_linie_id
-            // instead of doing the userdb.query below, to see if
+            client.SISMEMBER('interest_line:' + member_id, interest_id, function (err, result) {
+              if (err) throw err;
 
-            // userdb.query('SELECT id FROM interest_line' +
-            //   ' WHERE member_id = ' + member_id +
-            //   ' AND interest_id = ' + interest_id +
-            //   ' AND location_id = ' + location_id, function (err, result) {
-            //     if (err) throw err;
 
-            //     if (result.length === 1) {
-            //       work();
-            //       return;
-            //     } else {
-                  userdb.insert('interest_line', interest_line, function () {
-                    work();
-                    return;
-                  });
-              //   }
-              // });
+              if (result === 1) {
+                work();
+                return;
+              } else {
+
+                var interest_line = {
+                  member_id: parseInt(member_id),
+                  location_id: parseInt(location_id),
+                  interest_id: parseInt(interest_id),
+                  active: 1,
+                  created_at: tbl_interesse_linie.oprettet
+                };
+
+                userdb.insert('interest_line', interest_line, function () {
+                  client.SADD('interest_line:' + member_id, interest_id);
+                  work();
+                  return;
+                });
+              }
+            });
           });
         });
       });
@@ -425,6 +455,11 @@ module.exports.convertUserActions = function (callback) {
   work();
 
   function work () {
+    if (exiting) {
+      console.log('Clean exit.');
+      process.exit(0);
+    }
+    
     client.RPOP('tbl_user_action', function (err, data) {
 
       if (data === null)
@@ -575,57 +610,115 @@ function createMdbSyncSystem () {
 
 
 
-module.exports.tutu = function (callback) {
-  next();
 
-  function next () {
-    client.RPOP('tbl_bruger', function (err, bruger) {
-      if (bruger === null)
-        callback();
+// module.exports.diffMembers = function (callback) {
+//   var convertedMembers = 0,
+//       start = Date.now(),
+//       splitTime = start;
 
-      var tbl_bruger = JSON.parse(bruger);
+//   work();
 
-      client.HEXISTS('members', tbl_bruger.user_id, function (err, exists) {
-        if (exists === 0) {
-          console.log('Not found in Redis ' + tbl_bruger.user_id);
-          // throw new Error('Not found in Redis ' + tbl_bruger.user_id);
-        }
+//   function work () {
+//     if (exiting) {
+//       console.log('Clean exit.');
+//       process.exit(0);
+//     }
 
-        next();
-      });
-    });
-  }
-};
+//     client.RPOP('tbl_bruger', function (err, bruger) {
+//       if (err) throw err;
 
-module.exports.kaka = function (callback) {
-  console.log('started');
+//       if (bruger === null)
+//         return callback();
+//       else {
+//         var tbl_bruger = JSON.parse(bruger);
+//         client.HEXISTS('members', tbl_bruger.user_id, function (err, exists) {
+//           if (exists === 0) {
+//             client.LPUSH('tbl_bruger_diff', bruger, function (err, result) {
+//               work();
+//             });
+//           } else {
+//             work();
+//           }
+//         });
+//       }
+//     });
+//   }
+// };
 
-  userdb.query('SELECT mdb_user_id FROM member', function (err, members) {
-    var count = members.length,
-        done = 0;
 
-    console.log('length', count);
-    members.forEach(function(member) {
-      //console.log('user_id', user_id);
-      client.HEXISTS('members', member.mdb_user_id, function (err, exists) {
-        console.log('exists', exists);
-        //console.log('member', member);
-        if (exists === 0)
-          console.log('Not found in Redis', member.mdb_user_id);
 
-        ++done;
-        if (done === count) {
-          console.log('done', done);
-          callback();
-        }
-      });
+// module.exports.missingInMysql = function (callback) {
+//   mdb.query('SELECT user_id FROM tbl_bruger', function (err, result) {
+//     console.log('Got the ids from mdb', result.rowCount);
+//     var done = 0,
+//         count = result.rowCount,
+//         mdb_ids = result.rows.map (function (tbl_bruger) {
+//           return tbl_bruger.user_id;
+//         });
 
-      // client.HGET('members', user_id, function (err, member_id) {
-      //   userdb.query('select id from member where id =' 0 member_id, function (err, result) {
+//     console.log('MDB Ids count after map', mdb_ids.length);
 
-      //   });
-      // });
-    });
-  });
-};
+
+//     userdb.query('SELECT mdb_user_id FROM member', function (err, result) {
+//       console.log('Got the ids from userdb', result.length);
+//       var userdb_ids = result.map(function (member) {
+//         return member.mdb_user_id;
+//       });
+
+//       console.log('UserDB Ids count after map', userdb_ids.length);
+
+//       mdb_ids.forEach(function (user_id) {
+
+//         var existsInMySQL = userdb_ids.indexOf(user_id) > 0;
+
+//         if (!existsInMySQL) {
+//           client.SADD('smissing_mysql', user_id);
+//         }
+
+//         if (++done === count) {
+//           callback();
+//         }
+
+
+//         if (done % 1000 === 0) {
+//           console.log(done, 'done /', count);
+//         }
+//       });
+//     });
+//   });
+// };
+
+// module.exports.missingInRedis = function (callback) {
+//   mdb.query('SELECT user_id FROM tbl_bruger', function (err, result) {
+//     console.log('Got the ids from mdb', result.rowCount);
+//     var done = 0,
+//         count = result.rowCount,
+//         mdb_ids = result.rows.map (function (tbl_bruger) {
+//           return tbl_bruger.user_id;
+//         });
+
+//     console.log('MDB Ids count after map', mdb_ids.length);
+
+//     mdb_ids.forEach(function (user_id) {
+
+//       client.HEXISTS('members', user_id, function (err, exists) {
+
+//         if (exists === 0) {
+//           client.SADD('smissing_redis', user_id);
+//         }
+
+//         if (++done === count) {
+//           callback();
+//         }
+
+//         if (done % 1000 === 0) {
+//           console.log(done, 'done /', count);
+//         }
+//       });
+//     });
+//   });
+// };
+
+
+
 

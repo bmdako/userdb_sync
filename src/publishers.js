@@ -4,7 +4,6 @@
 
 var mdb = require('./mdb_client'),
     userdb = require('./userdb_client'),
-    redis_helper = require('./redis_helper'),
     fs = require('fs'),
     eventEmitter = require('events').EventEmitter,
     fs = require('fs'),
@@ -12,15 +11,6 @@ var mdb = require('./mdb_client'),
     redis = require("redis"),
     client = redis.createClient();
 
-
-module.exports.mapPublisherIntoRedis = function (callback) {
-  redis_helper.createHashMappingFromUserdb('SELECT mdb_publisher_id, id FROM publisher', 'publishers', callback);
-};
-
-
-module.exports.mapSubscriptionIntoRedis = function (callback) {
-  redis_helper.createHashMappingFromUserdb('SELECT mdb_nyhedsbrev_id, id FROM subscription', 'subscriptions', callback);
-};
 
 
 // mysql> show columns from publisher;
@@ -74,9 +64,7 @@ module.exports.convertPublishers = function (callback) {
             mdb_publisher_id: tbl_publisher.publisher_id
           };
 
-          userdb.insert('publisher', publisher, function (err, result) {
-            client.HSET('publishers', tbl_publisher.publisher_id, result.insertId);
-          });
+          userdb.insert('publisher', publisher);
         }
       });
 
@@ -178,9 +166,7 @@ module.exports.convertSubscriptions = function (callback) {
         insert(subscription);
       });
     } else {
-      userdb.insert('subscription', subscription, function (err, result) {
-        client.HSET('subscriptions', subscription.mdb_nyhedsbrev_id, result.insertId);
-      });
+      userdb.insert('subscription', subscription);
     }
   }
 };

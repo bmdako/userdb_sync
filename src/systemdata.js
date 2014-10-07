@@ -4,35 +4,12 @@
 
 var mdb = require('./mdb_client'),
     userdb = require('./userdb_client'),
-    redis_helper = require('./redis_helper'),
     fs = require('fs'),
     eventEmitter = require('events').EventEmitter,
     fs = require('fs'),
     workerEmitter = new eventEmitter(),
     redis = require("redis"),
     client = redis.createClient();
-
-
-
-module.exports.mapLocationsIntoRedis = function (callback) {
-  redis_helper.createHashMappingFromUserdb('SELECT mdb_location_id, id FROM location', 'locations', callback);
-};
-
-module.exports.mapPermissionIntoRedis = function (callback) {
-  redis_helper.createHashMappingFromUserdb('SELECT mdb_nyhedsbrev_id, id FROM permission', 'permissions', callback);
-};
-
-module.exports.mapInterestIntoRedis = function (callback) {
-  redis_helper.createHashMappingFromUserdb('SELECT mdb_interesse_id, id FROM interest', 'interests', callback);
-};
-
-module.exports.mapActionTypeIntoRedis = function (callback) {
-  redis_helper.createHashMappingFromUserdb('SELECT description, id FROM action_type', 'action_types', callback);
-};
-
-module.exports.mapReasonTypeIntoRedis = function (callback) {
-  redis_helper.createHashMappingFromUserdb('SELECT text, id FROM reason_type', 'reason_types', callback);
-};
 
 
 
